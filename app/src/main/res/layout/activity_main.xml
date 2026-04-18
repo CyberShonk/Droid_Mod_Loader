@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Droid Mod Loader Test Panel"
+        android:textSize="20sp"
+        android:paddingBottom="12dp" />
+
+    <Button
+        android:id="@+id/buttonSmokeTest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run Smoke Test" />
+
+    <Button
+        android:id="@+id/buttonPathUtilsTest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run PathUtils Test" />
+
+    <Button
+        android:id="@+id/buttonExtractorTest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run Extractor Test" />
+
+    <Button
+        android:id="@+id/buttonScannerTest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run Scanner Test" />
+
+    <Button
+        android:id="@+id/buttonConflictTest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run Conflict Test" />
+
+    <Button
+        android:id="@+id/buttonStagingTest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run Staging Test" />
+
+    <Button
+        android:id="@+id/buttonDiffTest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run Diff Test" />
+
+    <Button
+        android:id="@+id/buttonStateTest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run Mod State Test" />
+
+    <Button
+        android:id="@+id/buttonClearLog"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Clear Log" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingTop="12dp">
+
+        <TextView
+            android:id="@+id/logTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Log output will appear here..."
+            android:textSize="14sp" />
+    </ScrollView>
+
+</LinearLayout>
