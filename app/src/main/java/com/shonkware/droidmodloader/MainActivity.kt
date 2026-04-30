@@ -87,6 +87,8 @@ class MainActivity : ComponentActivity() {
         val buttonResetAppData: Button = findViewById(R.id.buttonResetAppData)
         val buttonInstalledRecordTest: Button = findViewById(R.id.buttonInstalledRecordTest)
         val buttonDeployScopeTest: Button = findViewById(R.id.buttonDeployScopeTest)
+        val buttonDeployCurrentState: Button = findViewById(R.id.buttonDeployCurrentState)
+        val buttonDeploymentManifestTest: Button = findViewById(R.id.buttonDeploymentManifestTest)
 
         buttonSmokeTest.setOnClickListener {
             runInBackground { runSmokeTest() }
@@ -188,6 +190,14 @@ class MainActivity : ComponentActivity() {
 
         buttonDeployScopeTest.setOnClickListener {
             runInBackground { runDeployScopeLessonTest() }
+        }
+
+        buttonDeployCurrentState.setOnClickListener {
+            runInBackground { runDeployCurrentStateWorkflow() }
+        }
+
+        buttonDeploymentManifestTest.setOnClickListener {
+            runInBackground { runDeploymentManifestLessonTest() }
         }
 
         appendLog("UI ready. Use the workflow buttons or manage installed mods below.")
@@ -1135,38 +1145,93 @@ class MainActivity : ComponentActivity() {
 
         val internalBaseDir = filesDir
 
-        val tempDir = File(internalBaseDir, "temp")
-        val modsDir = File(internalBaseDir, "mods")
-        val stagingDir = File(internalBaseDir, "staging")
-        val stateDir = File(externalBaseDir, "state")
-        val stateFile = File(stateDir, "installed_mods.json")
+        val testRoot = File(internalBaseDir, "lesson_tests/mod_engine")
+        val externalTestRoot = File(externalBaseDir, "lesson_tests/mod_engine")
 
-        tempDir.mkdirs()
-        modsDir.mkdirs()
-        stagingDir.mkdirs()
-        stateDir.mkdirs()
+        val tempDir = File(testRoot, "temp")
+        val modsDir = File(testRoot, "mods")
+        val stagingDir = File(testRoot, "staging")
+        val archiveDir = File(testRoot, "archives")
+
+        val stateDir = File(externalTestRoot, "state")
+        val stateFile = File(stateDir, "installed_mods.json")
+        val deploymentManifestFile = File(stateDir, "deployment_manifest.json")
+
+        val deployRootDir = File(testRoot, "deploy_root")
+
+        fun ensureDir(dir: File) {
+            if (!dir.exists() && !dir.mkdirs()) {
+                throw IllegalStateException("Could not create directory: ${dir.absolutePath}")
+            }
+
+            if (!dir.isDirectory) {
+                throw IllegalStateException("Path exists but is not a directory: ${dir.absolutePath}")
+            }
+        }
 
         try {
+            appendLog("Cleaning previous ModEngine lesson test files...")
+
+            if (testRoot.exists() && !testRoot.deleteRecursively()) {
+                throw IllegalStateException("Could not delete old test root: ${testRoot.absolutePath}")
+            }
+
+            if (externalTestRoot.exists() && !externalTestRoot.deleteRecursively()) {
+                throw IllegalStateException("Could not delete old external test root: ${externalTestRoot.absolutePath}")
+            }
+
+            ensureDir(tempDir)
+            ensureDir(modsDir)
+            ensureDir(stagingDir)
+            ensureDir(archiveDir)
+            ensureDir(stateDir)
+
+            appendLog("Test root: ${testRoot.absolutePath}")
+            appendLog("External test root: ${externalTestRoot.absolutePath}")
+            appendLog("Temp dir: ${tempDir.absolutePath}")
+            appendLog("Mods dir: ${modsDir.absolutePath}")
+            appendLog("Staging dir: ${stagingDir.absolutePath}")
+            appendLog("State file: ${stateFile.absolutePath}")
+
             val engine = ModEngine(
                 tempDir = tempDir,
                 modsDir = modsDir,
                 stagingDir = stagingDir,
-                stateFile = stateFile
+                stateFile = stateFile,
+                deploymentManifestFile = deploymentManifestFile,
+                deployRootDir = deployRootDir
             )
 
-            val archive = createTestArchiveZip(internalBaseDir)
+            val archive = createTestArchiveZip(archiveDir)
+            appendLog("Created test archive: ${archive.absolutePath}")
+            appendLog("Archive exists: ${archive.exists()}")
+            appendLog("Archive size: ${archive.length()} bytes")
+
             val archiveMod = engine.installArchive(archive, priority = 10)
+            appendLog("Installed archive mod through ModEngine:")
+            appendLog("$archiveMod")
 
             val looseDir = createLooseTestMod(modsDir)
+            appendLog("Created loose test mod folder: ${looseDir.absolutePath}")
+
             val overwriteDir = createOverwriteTestMod(modsDir)
+            appendLog("Created overwrite test mod folder: ${overwriteDir.absolutePath}")
 
             val looseMod = engine.buildModFromInstalledFolder(looseDir, priority = 20)
+            appendLog("Built loose mod through ModEngine:")
+            appendLog("$looseMod")
+
             val overwriteMod = engine.buildModFromInstalledFolder(overwriteDir, priority = 30)
+            appendLog("Built overwrite mod through ModEngine:")
+            appendLog("$overwriteMod")
 
             val mods = listOf(archiveMod, looseMod, overwriteMod)
 
+            appendLog("Saving ${mods.size} mods through ModEngine...")
             engine.saveMods(mods)
-            appendLog("Saved mods through ModEngine.")
+
+            appendLog("State file exists after save: ${stateFile.exists()}")
+            appendLog("State file size after save: ${stateFile.length()} bytes")
 
             val loadedMods = engine.loadMods()
             appendLog("Loaded mods through ModEngine: ${loadedMods.size}")
@@ -1175,10 +1240,28 @@ class MainActivity : ComponentActivity() {
                 appendLog("ENGINE LOADED MOD: $mod")
             }
 
+            if (loadedMods.size != 3) {
+                appendError("Expected 3 loaded mods, but got ${loadedMods.size}")
+                appendLog("RESULT: FAIL")
+                appendLog("----- ModEngine Lesson Test End -----")
+                return
+            }
+
+            appendLog("Rebuilding staging through ModEngine...")
+
+            if (stagingDir.exists() && !stagingDir.deleteRecursively()) {
+                throw IllegalStateException("Could not clean staging before rebuild: ${stagingDir.absolutePath}")
+            }
+
+            ensureDir(stagingDir)
+
             val winningRecords = engine.rebuildStaging(loadedMods)
             appendLog("Winning record count from ModEngine: ${winningRecords.size}")
 
             val stagedIcon = File(stagingDir, "textures/ui/icon.dds")
+            appendLog("Expected staged icon path: ${stagedIcon.absolutePath}")
+            appendLog("Staged icon exists: ${stagedIcon.exists()}")
+
             if (!stagedIcon.exists()) {
                 appendError("Staged icon not found after engine rebuild.")
                 appendLog("RESULT: FAIL")
@@ -1191,15 +1274,19 @@ class MainActivity : ComponentActivity() {
 
             if (stagedIconContent != "overwrite texture data") {
                 appendError("Engine staging produced wrong winner for textures/ui/icon.dds")
+                appendError("Expected: overwrite texture data")
+                appendError("Actual: $stagedIconContent")
                 appendLog("RESULT: FAIL")
             } else {
                 appendLog("Engine staging produced correct winner for textures/ui/icon.dds")
                 appendLog("State file path: ${stateFile.absolutePath}")
                 appendLog("State file exists: ${stateFile.exists()}")
+
                 if (stateFile.exists()) {
                     appendLog("State file contents:")
                     appendLog(stateFile.readText())
                 }
+
                 appendLog("RESULT: PASS")
             }
 
@@ -1226,16 +1313,22 @@ class MainActivity : ComponentActivity() {
         val stateDir = File(externalBaseDir, "state")
         val stateFile = File(stateDir, "installed_mods.json")
 
+        val deployDir = File(externalBaseDir, "deploy_target/Skyrim/Data")
+        val deploymentManifestFile = File(externalBaseDir, "state/deployment_manifest.json")
+
         tempDir.mkdirs()
         modsDir.mkdirs()
         stagingDir.mkdirs()
         stateDir.mkdirs()
+        deployDir.mkdirs()
 
         return ModEngine(
             tempDir = tempDir,
             modsDir = modsDir,
             stagingDir = stagingDir,
-            stateFile = stateFile
+            stateFile = stateFile,
+            deploymentManifestFile = deploymentManifestFile,
+            deployRootDir = deployDir
         )
     }
 
@@ -1955,6 +2048,84 @@ class MainActivity : ComponentActivity() {
 
         refreshDashboard()
         appendLog("----- Deploy Scope Lesson Test End -----")
+    }
+
+    private fun runDeployCurrentStateWorkflow() {
+        appendLog("----- Deploy Current State Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val externalBaseDir = getExternalFilesDir(null)
+        if (externalBaseDir == null) {
+            appendError("External files directory is null")
+            appendLog("RESULT: FAIL")
+            appendLog("----- Deploy Current State Workflow End -----")
+            return
+        }
+
+        val deployRootDir = File(externalBaseDir, "deploy_target/Skyrim/Data")
+        val manifestFile = File(externalBaseDir, "state/deployment_manifest.json")
+
+        try {
+            val result = engine.deployCurrentState()
+
+            appendLog("Deploy target: ${deployRootDir.absolutePath}")
+            appendLog("Deployment manifest: ${manifestFile.absolutePath}")
+            appendLog("Manifest exists: ${manifestFile.exists()}")
+            appendLog("Adds: ${result.addCount}")
+            appendLog("Removes: ${result.removeCount}")
+            appendLog("Updates: ${result.updateCount}")
+            appendLog("Final deployed file count: ${result.finalRecordCount}")
+
+            val deployedItems = if (deployRootDir.exists()) deployRootDir.walkTopDown().toList() else emptyList()
+            appendLog("Deploy target item count: ${deployedItems.size}")
+
+            for (item in deployedItems.take(25)) {
+                appendLog("DEPLOY ITEM: ${item.absolutePath}")
+            }
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Deploy current state workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Deploy Current State Workflow End -----")
+    }
+
+    private fun runDeploymentManifestLessonTest() {
+        appendLog("----- Deployment Manifest Lesson Test Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            runInstallArchiveWorkflow()
+            runInstallLooseWorkflow()
+            runSaveInstalledModsWorkflow()
+
+            val firstDeploy = engine.deployCurrentState()
+            appendLog("First deploy -> Adds: ${firstDeploy.addCount}, Removes: ${firstDeploy.removeCount}, Updates: ${firstDeploy.updateCount}")
+
+            val secondDeploy = engine.deployCurrentState()
+            appendLog("Second deploy -> Adds: ${secondDeploy.addCount}, Removes: ${secondDeploy.removeCount}, Updates: ${secondDeploy.updateCount}")
+
+            val passed =
+                secondDeploy.addCount == 0 &&
+                        secondDeploy.removeCount == 0 &&
+                        secondDeploy.updateCount == 0
+
+            if (passed) {
+                appendLog("Second deploy correctly detected no changes.")
+                appendLog("RESULT: PASS")
+            } else {
+                appendLog("Second deploy unexpectedly changed files.")
+                appendLog("RESULT: FAIL")
+            }
+        } catch (e: Exception) {
+            appendError("Deployment manifest lesson test failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Deployment Manifest Lesson Test End -----")
     }
 
 }

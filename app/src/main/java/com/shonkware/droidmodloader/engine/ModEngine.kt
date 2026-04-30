@@ -15,6 +15,10 @@ import com.shonkware.droidmodloader.engine.model.ModFile
 import com.shonkware.droidmodloader.engine.model.ModType
 import com.shonkware.droidmodloader.engine.model.DeployScope
 import com.shonkware.droidmodloader.engine.rules.DeployFileClassifier
+import com.shonkware.droidmodloader.engine.data.DeploymentManifestRepository
+import com.shonkware.droidmodloader.engine.deploy.DeploymentManager
+import com.shonkware.droidmodloader.engine.deploy.DeploymentResult
+import com.shonkware.droidmodloader.engine.model.DeploymentRecord
 import java.io.File
 
 data class UninstallResult(
@@ -29,7 +33,9 @@ class ModEngine(
     private val tempDir: File,
     private val modsDir: File,
     private val stagingDir: File,
-    private val stateFile: File
+    private val stateFile: File,
+    private val deploymentManifestFile: File,
+    private val deployRootDir: File
 ) {
 
     private val extractor = ModExtractor(tempDir, modsDir)
@@ -38,6 +44,8 @@ class ModEngine(
     private val stateRepository = ModStateRepository(stateFile)
     private val installedModRecordRepository = InstalledModRecordRepository()
     private val deployFileClassifier = DeployFileClassifier()
+    private val deploymentManifestRepository = DeploymentManifestRepository(deploymentManifestFile)
+    private val deploymentManager = DeploymentManager(deployRootDir)
 
     fun installArchive(archive: File, priority: Int, enabled: Boolean = true): Mod {
         val extractedDir = extractor.extractArchive(archive)
@@ -197,6 +205,13 @@ class ModEngine(
             if (stagingDir.exists()) stagingDir.deleteRecursively()
             if (importsDir.exists()) importsDir.deleteRecursively()
             if (stateFile.exists()) stateFile.delete()
+            if (deployRootDir.exists()) {
+                deployRootDir.deleteRecursively()
+            }
+
+            if (deploymentManifestFile.exists()) {
+                deploymentManifestFile.delete()
+            }
 
             tempDir.mkdirs()
             modsDir.mkdirs()
@@ -343,5 +358,23 @@ class ModEngine(
             val scope = deployFileClassifier.classify(it.normalizedPath)
             deployFileClassifier.isDeployableToCurrentStaging(scope)
         }
+    }
+
+    fun getCurrentWinningRecords(): List<FileRecord> {
+        return resolve(getCurrentMods())
+    }
+
+    fun deployCurrentState(): DeploymentResult {
+        val oldManifest = deploymentManifestRepository.load()
+        val newWinningRecords = getCurrentWinningRecords()
+
+        val (newManifest, result) = deploymentManager.deploy(oldManifest, newWinningRecords)
+        deploymentManifestRepository.save(newManifest)
+
+        return result
+    }
+
+    fun clearDeploymentManifest() {
+        deploymentManifestRepository.clear()
     }
 }

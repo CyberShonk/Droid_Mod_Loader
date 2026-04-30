@@ -123,6 +123,12 @@
                 android:text="Install Loose Test Mods" />
 
             <Button
+                android:id="@+id/buttonDeployCurrentState"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Deploy Current State" />
+
+            <Button
                 android:id="@+id/buttonResetAppData"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -220,6 +226,12 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Run Deploy Scope Test" />
+
+                <Button
+                    android:id="@+id/buttonDeploymentManifestTest"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Run Deployment Manifest Test" />
 
             </LinearLayout>
 
