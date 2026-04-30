@@ -129,6 +129,62 @@
                 android:text="Deploy Current State" />
 
             <Button
+                android:id="@+id/buttonSaveGameConfig"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Save Game Configs" />
+
+            <Button
+                android:id="@+id/buttonLoadGameConfig"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Load Game Configs" />
+
+            <Button
+                android:id="@+id/buttonDeploySkyrim"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Deploy Skyrim" />
+
+            <TextView
+                android:id="@+id/gameConfigTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Game Deployment Config"
+                android:textSize="18sp"
+                android:paddingTop="12dp"
+                android:paddingBottom="8dp" />
+
+            <Spinner
+                android:id="@+id/spinnerGameConfig"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/editTargetPath"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Target Data Path" />
+
+            <CheckBox
+                android:id="@+id/checkRealDeployEnabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Enable Real Deploy" />
+
+            <Button
+                android:id="@+id/buttonLoadSelectedGameConfig"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Load Selected Game Config" />
+
+            <Button
+                android:id="@+id/buttonSaveSelectedGameConfig"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Save Selected Game Config" />
+
+            <Button
                 android:id="@+id/buttonResetAppData"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -233,8 +289,19 @@
                     android:layout_height="wrap_content"
                     android:text="Run Deployment Manifest Test" />
 
-            </LinearLayout>
+                <Button
+                    android:id="@+id/buttonGameTargetTest"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Run Game Target Test" />
 
+                <Button
+                    android:id="@+id/buttonGameConfigEditorTest"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Run Game Config Editor Test" />
+
+            </LinearLayout>
 
 
             <Button

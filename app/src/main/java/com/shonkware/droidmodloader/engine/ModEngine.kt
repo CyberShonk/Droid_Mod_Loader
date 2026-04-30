@@ -19,6 +19,8 @@ import com.shonkware.droidmodloader.engine.data.DeploymentManifestRepository
 import com.shonkware.droidmodloader.engine.deploy.DeploymentManager
 import com.shonkware.droidmodloader.engine.deploy.DeploymentResult
 import com.shonkware.droidmodloader.engine.model.DeploymentRecord
+import com.shonkware.droidmodloader.engine.data.GameDeploymentConfigRepository
+import com.shonkware.droidmodloader.engine.model.GameDeploymentConfig
 import java.io.File
 
 data class UninstallResult(
@@ -35,7 +37,8 @@ class ModEngine(
     private val stagingDir: File,
     private val stateFile: File,
     private val deploymentManifestFile: File,
-    private val deployRootDir: File
+    private val deployRootDir: File,
+    private val gameConfigFile: File
 ) {
 
     private val extractor = ModExtractor(tempDir, modsDir)
@@ -46,6 +49,7 @@ class ModEngine(
     private val deployFileClassifier = DeployFileClassifier()
     private val deploymentManifestRepository = DeploymentManifestRepository(deploymentManifestFile)
     private val deploymentManager = DeploymentManager(deployRootDir)
+    private val gameDeploymentConfigRepository = GameDeploymentConfigRepository(gameConfigFile)
 
     fun installArchive(archive: File, priority: Int, enabled: Boolean = true): Mod {
         val extractedDir = extractor.extractArchive(archive)
@@ -213,6 +217,12 @@ class ModEngine(
                 deploymentManifestFile.delete()
             }
 
+            if (deploymentManifestFile.parentFile?.exists() == true) {
+                deploymentManifestFile.parentFile?.listFiles()
+                    ?.filter { it.name.startsWith("deployment_manifest") && it.extension == "json" }
+                    ?.forEach { it.delete() }
+            }
+
             tempDir.mkdirs()
             modsDir.mkdirs()
             stagingDir.mkdirs()
@@ -376,5 +386,59 @@ class ModEngine(
 
     fun clearDeploymentManifest() {
         deploymentManifestRepository.clear()
+    }
+
+    fun saveGameDeploymentConfigs(configs: List<GameDeploymentConfig>) {
+        gameDeploymentConfigRepository.save(configs)
+    }
+
+    fun loadGameDeploymentConfigs(): List<GameDeploymentConfig> {
+        return gameDeploymentConfigRepository.load()
+    }
+
+    fun getGameDeploymentConfig(gameId: String): GameDeploymentConfig? {
+        return loadGameDeploymentConfigs().firstOrNull { it.gameId == gameId }
+    }
+
+    fun validateTargetDataPath(path: String): Boolean {
+        if (path.isBlank()) return false
+
+        val target = File(path)
+        val normalized = path.lowercase()
+
+        if (normalized.contains("android/data/com.shonkware.droidmodloader")) return false
+        if (normalized.endsWith("/")) return true
+
+        return target.exists() || target.parentFile?.exists() == true
+    }
+    fun deployForGame(gameId: String): DeploymentResult {
+        val config = getGameDeploymentConfig(gameId)
+
+        val effectiveDeployRoot = if (
+            config != null &&
+            config.realDeployEnabled &&
+            validateTargetDataPath(config.targetDataPath)
+        ) {
+            File(config.targetDataPath)
+        } else {
+            deployRootDir
+        }
+
+        val effectiveManifestFile = if (config != null) {
+            File(deploymentManifestFile.parentFile, "deployment_manifest_${config.gameId}.json")
+        } else {
+            deploymentManifestFile
+        }
+
+        val effectiveManifestRepository = DeploymentManifestRepository(effectiveManifestFile)
+        val effectiveDeploymentManager = DeploymentManager(effectiveDeployRoot)
+
+        val oldManifest = effectiveManifestRepository.load()
+        val newWinningRecords = getCurrentWinningRecords()
+
+        val (newManifest, result) = effectiveDeploymentManager.deploy(oldManifest, newWinningRecords)
+        effectiveManifestRepository.save(newManifest)
+
+        return result
     }
 }

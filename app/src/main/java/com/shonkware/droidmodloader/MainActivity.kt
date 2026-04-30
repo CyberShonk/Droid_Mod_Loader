@@ -20,13 +20,17 @@ import com.shonkware.droidmodloader.engine.build.StagingManager
 import com.shonkware.droidmodloader.engine.data.ModStateRepository
 import com.shonkware.droidmodloader.engine.ModEngine
 import com.shonkware.droidmodloader.engine.model.DeployScope
-import com.shonkware.droidmodloader.engine.rules.DeployFileClassifier
+import com.shonkware.droidmodloader.engine.model.GameDeploymentConfig
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import android.net.Uri
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.LinearLayout
 import android.app.AlertDialog
+import android.widget.ArrayAdapter
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.Spinner
 
 
 class MainActivity : ComponentActivity() {
@@ -36,6 +40,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var logTextView: TextView
+    private lateinit var spinnerGameConfig: Spinner
+    private lateinit var editTargetPath: EditText
+    private lateinit var checkRealDeployEnabled: CheckBox
 
     private val importZipLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -63,6 +70,13 @@ class MainActivity : ComponentActivity() {
         summaryTextView = findViewById(R.id.summaryTextView)
         lessonToolsContainer = findViewById(R.id.lessonToolsContainer)
 
+        spinnerGameConfig = findViewById(R.id.spinnerGameConfig)
+        editTargetPath = findViewById(R.id.editTargetPath)
+        checkRealDeployEnabled = findViewById(R.id.checkRealDeployEnabled)
+
+        val buttonLoadSelectedGameConfig: Button = findViewById(R.id.buttonLoadSelectedGameConfig)
+        val buttonSaveSelectedGameConfig: Button = findViewById(R.id.buttonSaveSelectedGameConfig)
+
         val buttonRefreshDashboard: Button = findViewById(R.id.buttonRefreshDashboard)
         val buttonToggleLessonTools: Button = findViewById(R.id.buttonToggleLessonTools)
         val buttonRefreshModsPanel: Button = findViewById(R.id.buttonRefreshModsPanel)
@@ -89,6 +103,15 @@ class MainActivity : ComponentActivity() {
         val buttonDeployScopeTest: Button = findViewById(R.id.buttonDeployScopeTest)
         val buttonDeployCurrentState: Button = findViewById(R.id.buttonDeployCurrentState)
         val buttonDeploymentManifestTest: Button = findViewById(R.id.buttonDeploymentManifestTest)
+        val buttonSaveGameConfig: Button = findViewById(R.id.buttonSaveGameConfig)
+        val buttonLoadGameConfig: Button = findViewById(R.id.buttonLoadGameConfig)
+        val buttonDeploySkyrim: Button = findViewById(R.id.buttonDeploySkyrim)
+        val buttonGameTargetTest: Button = findViewById(R.id.buttonGameTargetTest)
+        val buttonGameConfigEditorTest: Button = findViewById(R.id.buttonGameConfigEditorTest)
+
+        buttonGameConfigEditorTest.setOnClickListener {
+            runInBackground { runGameConfigEditorLessonTest() }
+        }
 
         buttonSmokeTest.setOnClickListener {
             runInBackground { runSmokeTest() }
@@ -200,8 +223,35 @@ class MainActivity : ComponentActivity() {
             runInBackground { runDeploymentManifestLessonTest() }
         }
 
+        buttonSaveGameConfig.setOnClickListener {
+            runInBackground { runSaveGameConfigWorkflow() }
+        }
+
+        buttonLoadGameConfig.setOnClickListener {
+            runInBackground { runLoadGameConfigWorkflow() }
+        }
+
+        buttonDeploySkyrim.setOnClickListener {
+            runInBackground { runDeploySkyrimWorkflow() }
+        }
+
+        buttonGameTargetTest.setOnClickListener {
+            runInBackground { runGameTargetLessonTest() }
+        }
+
+        buttonLoadSelectedGameConfig.setOnClickListener {
+            runInBackground { loadSelectedGameConfigIntoForm() }
+        }
+
+        buttonSaveSelectedGameConfig.setOnClickListener {
+            runInBackground { saveSelectedGameConfigFromForm() }
+        }
+
+        runInBackground { refreshGameConfigSpinner() }
+
         appendLog("UI ready. Use the workflow buttons or manage installed mods below.")
         runInBackground { refreshDashboard() }
+
     }
 
     private fun runInBackground(block: () -> Unit) {
@@ -1155,9 +1205,10 @@ class MainActivity : ComponentActivity() {
 
         val stateDir = File(externalTestRoot, "state")
         val stateFile = File(stateDir, "installed_mods.json")
-        val deploymentManifestFile = File(stateDir, "deployment_manifest.json")
 
-        val deployRootDir = File(testRoot, "deploy_root")
+        val deploymentManifestFile = File(externalBaseDir, "state/deployment_manifest.json")
+        val deployRootDir = File(externalBaseDir, "deploy_target/Skyrim/Data")
+        val gameConfigFile = File(externalBaseDir, "state/game_deployment_configs.json")
 
         fun ensureDir(dir: File) {
             if (!dir.exists() && !dir.mkdirs()) {
@@ -1199,7 +1250,8 @@ class MainActivity : ComponentActivity() {
                 stagingDir = stagingDir,
                 stateFile = stateFile,
                 deploymentManifestFile = deploymentManifestFile,
-                deployRootDir = deployRootDir
+                deployRootDir = deployRootDir,
+                gameConfigFile = gameConfigFile
             )
 
             val archive = createTestArchiveZip(archiveDir)
@@ -1315,6 +1367,7 @@ class MainActivity : ComponentActivity() {
 
         val deployDir = File(externalBaseDir, "deploy_target/Skyrim/Data")
         val deploymentManifestFile = File(externalBaseDir, "state/deployment_manifest.json")
+        val gameConfigFile = File(externalBaseDir, "state/game_deployment_configs.json")
 
         tempDir.mkdirs()
         modsDir.mkdirs()
@@ -1328,7 +1381,8 @@ class MainActivity : ComponentActivity() {
             stagingDir = stagingDir,
             stateFile = stateFile,
             deploymentManifestFile = deploymentManifestFile,
-            deployRootDir = deployDir
+            deployRootDir = deployDir,
+            gameConfigFile = gameConfigFile
         )
     }
 
@@ -2126,6 +2180,279 @@ class MainActivity : ComponentActivity() {
         }
 
         appendLog("----- Deployment Manifest Lesson Test End -----")
+    }
+
+    private fun createDefaultGameConfigs(): List<GameDeploymentConfig> {
+        val externalBaseDir = getExternalFilesDir(null) ?: return emptyList()
+
+        val skyrimPath = File(externalBaseDir, "shared_game/Skyrim/Data")
+        val falloutNvPath = File(externalBaseDir, "shared_game/FalloutNV/Data")
+        skyrimPath.mkdirs()
+        falloutNvPath.mkdirs()
+
+        return listOf(
+            GameDeploymentConfig(
+                gameId = "skyrim_le",
+                displayName = "Skyrim Legendary Edition",
+                targetDataPath = skyrimPath.absolutePath,
+                realDeployEnabled = false
+            ),
+            GameDeploymentConfig(
+                gameId = "fallout_nv",
+                displayName = "Fallout New Vegas",
+                targetDataPath = falloutNvPath.absolutePath,
+                realDeployEnabled = false
+            )
+        )
+    }
+
+    private fun runSaveGameConfigWorkflow() {
+        appendLog("----- Save Game Config Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            val configs = createDefaultGameConfigs()
+            engine.saveGameDeploymentConfigs(configs)
+
+            appendLog("Saved game config count: ${configs.size}")
+            for (config in configs) {
+                appendLog("CONFIG: $config")
+            }
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Save game config workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Save Game Config Workflow End -----")
+    }
+
+    private fun runLoadGameConfigWorkflow() {
+        appendLog("----- Load Game Config Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            val configs = engine.loadGameDeploymentConfigs()
+            appendLog("Loaded game config count: ${configs.size}")
+            for (config in configs) {
+                appendLog("CONFIG: $config")
+            }
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Load game config workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Load Game Config Workflow End -----")
+    }
+
+    private fun runDeploySkyrimWorkflow() {
+        appendLog("----- Deploy Skyrim Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val externalBaseDir = getExternalFilesDir(null)
+        if (externalBaseDir == null) {
+            appendError("External files directory is null")
+            appendLog("RESULT: FAIL")
+            appendLog("----- Deploy Skyrim Workflow End -----")
+            return
+        }
+
+        val config = engine.getGameDeploymentConfig("skyrim_le")
+        appendLog("Skyrim config: $config")
+
+        try {
+            val result = engine.deployForGame("skyrim_le")
+
+            val effectiveTarget = if (
+                config != null &&
+                config.realDeployEnabled &&
+                engine.validateTargetDataPath(config.targetDataPath)
+            ) {
+                config.targetDataPath
+            } else {
+                File(externalBaseDir, "deploy_target/Skyrim/Data").absolutePath
+            }
+            val usingRealTarget = config != null &&
+                    config.realDeployEnabled &&
+                    engine.validateTargetDataPath(config.targetDataPath)
+
+            appendLog("Using real target: $usingRealTarget")
+
+            appendLog("Effective deploy target: $effectiveTarget")
+            appendLog("Adds: ${result.addCount}")
+            appendLog("Removes: ${result.removeCount}")
+            appendLog("Updates: ${result.updateCount}")
+            appendLog("Final deployed file count: ${result.finalRecordCount}")
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Deploy Skyrim workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Deploy Skyrim Workflow End -----")
+    }
+
+    private fun runGameTargetLessonTest() {
+        appendLog("----- Game Target Lesson Test Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            runSaveGameConfigWorkflow()
+            runInstallArchiveWorkflow()
+            runInstallLooseWorkflow()
+            runSaveInstalledModsWorkflow()
+
+            val config = engine.getGameDeploymentConfig("skyrim_le")
+            appendLog("Loaded Skyrim config: $config")
+
+            val configValid = config != null && engine.validateTargetDataPath(config.targetDataPath)
+            appendLog("Skyrim target path valid: $configValid")
+
+            val deployResult = engine.deployForGame("skyrim_le")
+            appendLog("Deploy result -> Adds: ${deployResult.addCount}, Removes: ${deployResult.removeCount}, Updates: ${deployResult.updateCount}")
+
+            val usedRealTarget = config != null &&
+                    config.realDeployEnabled &&
+                    configValid
+
+            if (!usedRealTarget) {
+                appendLog("Using simulated deploy target (expected for this test).")
+            }
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Game target lesson test failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Game Target Lesson Test End -----")
+    }
+
+    private fun refreshGameConfigSpinner() {
+        val engine = createModEngineForWorkflows() ?: return
+        val configs = engine.loadGameDeploymentConfigs()
+
+        val labels = if (configs.isEmpty()) {
+            listOf("skyrim_le", "fallout_nv")
+        } else {
+            configs.map { it.gameId }
+        }
+
+        runOnUiThread {
+            val adapter = ArrayAdapter(
+                this,
+                android.R.layout.simple_spinner_item,
+                labels
+            )
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinnerGameConfig.adapter = adapter
+        }
+    }
+
+    private fun loadSelectedGameConfigIntoForm() {
+        val engine = createModEngineForWorkflows() ?: return
+        val selectedGameId = spinnerGameConfig.selectedItem?.toString() ?: return
+
+        val config = engine.getGameDeploymentConfig(selectedGameId)
+        if (config == null) {
+            appendError("No config found for gameId=$selectedGameId")
+            return
+        }
+
+        runOnUiThread {
+            editTargetPath.setText(config.targetDataPath)
+            checkRealDeployEnabled.isChecked = config.realDeployEnabled
+        }
+
+        appendLog("Loaded config into form: $config")
+    }
+
+    private fun saveSelectedGameConfigFromForm() {
+        val engine = createModEngineForWorkflows() ?: return
+        val selectedGameId = spinnerGameConfig.selectedItem?.toString() ?: return
+
+        val existingConfigs = engine.loadGameDeploymentConfigs().toMutableList()
+
+        val displayName = when (selectedGameId) {
+            "skyrim_le" -> "Skyrim Legendary Edition"
+            "fallout_nv" -> "Fallout New Vegas"
+            else -> selectedGameId
+        }
+
+        val updatedConfig = GameDeploymentConfig(
+            gameId = selectedGameId,
+            displayName = displayName,
+            targetDataPath = editTargetPath.text.toString().trim(),
+            realDeployEnabled = checkRealDeployEnabled.isChecked
+        )
+
+        val index = existingConfigs.indexOfFirst { it.gameId == selectedGameId }
+        if (index >= 0) {
+            existingConfigs[index] = updatedConfig
+        } else {
+            existingConfigs.add(updatedConfig)
+        }
+
+        engine.saveGameDeploymentConfigs(existingConfigs)
+        appendLog("Saved updated config: $updatedConfig")
+    }
+
+    private fun runGameConfigEditorLessonTest() {
+        appendLog("----- Game Config Editor Lesson Test Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            runSaveGameConfigWorkflow()
+
+            val original = engine.getGameDeploymentConfig("skyrim_le")
+            appendLog("Original Skyrim config: $original")
+
+            val configs = engine.loadGameDeploymentConfigs().toMutableList()
+            val index = configs.indexOfFirst { it.gameId == "skyrim_le" }
+
+            if (index == -1) {
+                appendError("Could not find Skyrim config to edit.")
+                appendLog("RESULT: FAIL")
+                appendLog("----- Game Config Editor Lesson Test End -----")
+                return
+            }
+
+            val edited = configs[index].copy(
+                targetDataPath = configs[index].targetDataPath + "_edited",
+                realDeployEnabled = true
+            )
+            configs[index] = edited
+
+            engine.saveGameDeploymentConfigs(configs)
+
+            val reloaded = engine.getGameDeploymentConfig("skyrim_le")
+            appendLog("Reloaded Skyrim config: $reloaded")
+
+            val passed = reloaded != null &&
+                    reloaded.targetDataPath.endsWith("_edited") &&
+                    reloaded.realDeployEnabled
+
+            if (passed) {
+                appendLog("Game config editing persistence worked.")
+                appendLog("RESULT: PASS")
+            } else {
+                appendLog("Game config editing persistence failed.")
+                appendLog("RESULT: FAIL")
+            }
+        } catch (e: Exception) {
+            appendError("Game config editor lesson test failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        runInBackground { refreshGameConfigSpinner() }
+        appendLog("----- Game Config Editor Lesson Test End -----")
     }
 
 }
