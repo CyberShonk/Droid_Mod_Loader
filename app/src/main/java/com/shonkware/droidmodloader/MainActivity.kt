@@ -18,6 +18,14 @@ import com.shonkware.droidmodloader.engine.build.DiffEngine
 import com.shonkware.droidmodloader.engine.build.FileChange
 import com.shonkware.droidmodloader.engine.build.StagingManager
 import com.shonkware.droidmodloader.engine.data.ModStateRepository
+import com.shonkware.droidmodloader.engine.ModEngine
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.LinearLayout
+import android.app.AlertDialog
+
 
 class MainActivity : ComponentActivity() {
 
@@ -27,12 +35,35 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var logTextView: TextView
 
+    private val importZipLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) {
+            appendLog("No file selected.")
+            return@registerForActivityResult
+        }
+
+        runInBackground {
+            handleImportedZip(uri)
+        }
+    }
+    private lateinit var installedModsContainer: LinearLayout
+    private lateinit var summaryTextView: TextView
+    private lateinit var lessonToolsContainer: LinearLayout
+    private var lessonToolsVisible = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         logTextView = findViewById(R.id.logTextView)
+        installedModsContainer = findViewById(R.id.installedModsContainer)
+        summaryTextView = findViewById(R.id.summaryTextView)
+        lessonToolsContainer = findViewById(R.id.lessonToolsContainer)
 
+        val buttonRefreshDashboard: Button = findViewById(R.id.buttonRefreshDashboard)
+        val buttonToggleLessonTools: Button = findViewById(R.id.buttonToggleLessonTools)
+        val buttonRefreshModsPanel: Button = findViewById(R.id.buttonRefreshModsPanel)
         val buttonSmokeTest: Button = findViewById(R.id.buttonSmokeTest)
         val buttonPathUtilsTest: Button = findViewById(R.id.buttonPathUtilsTest)
         val buttonExtractorTest: Button = findViewById(R.id.buttonExtractorTest)
@@ -42,6 +73,17 @@ class MainActivity : ComponentActivity() {
         val buttonDiffTest: Button = findViewById(R.id.buttonDiffTest)
         val buttonClearLog: Button = findViewById(R.id.buttonClearLog)
         val buttonStateTest: Button = findViewById(R.id.buttonStateTest)
+        val buttonEngineTest: Button = findViewById(R.id.buttonEngineTest)
+        val buttonInstallArchiveWorkflow: Button = findViewById(R.id.buttonInstallArchiveWorkflow)
+        val buttonInstallLooseWorkflow: Button = findViewById(R.id.buttonInstallLooseWorkflow)
+        val buttonListInstalledMods: Button = findViewById(R.id.buttonListInstalledMods)
+        val buttonSaveInstalledMods: Button = findViewById(R.id.buttonSaveInstalledMods)
+        val buttonLoadSavedMods: Button = findViewById(R.id.buttonLoadSavedMods)
+        val buttonRebuildInstalledStaging: Button = findViewById(R.id.buttonRebuildInstalledStaging)
+        val buttonImportZip: Button = findViewById(R.id.buttonImportZip)
+        val buttonDeleteModTest: Button = findViewById(R.id.buttonDeleteModTest)
+        val buttonResetAppData: Button = findViewById(R.id.buttonResetAppData)
+        val buttonInstalledRecordTest: Button = findViewById(R.id.buttonInstalledRecordTest)
 
         buttonSmokeTest.setOnClickListener {
             runInBackground { runSmokeTest() }
@@ -79,7 +121,70 @@ class MainActivity : ComponentActivity() {
             logTextView.text = ""
         }
 
-        appendLog("UI ready. Tap a test button.")
+        buttonEngineTest.setOnClickListener {
+            runInBackground { runModEngineLessonTest() }
+        }
+
+        buttonInstallArchiveWorkflow.setOnClickListener {
+            runInBackground { runInstallArchiveWorkflow() }
+        }
+
+        buttonInstallLooseWorkflow.setOnClickListener {
+            runInBackground { runInstallLooseWorkflow() }
+        }
+
+        buttonListInstalledMods.setOnClickListener {
+            runInBackground { runListInstalledModsWorkflow() }
+        }
+
+        buttonSaveInstalledMods.setOnClickListener {
+            runInBackground { runSaveInstalledModsWorkflow() }
+        }
+
+        buttonLoadSavedMods.setOnClickListener {
+            runInBackground { runLoadSavedModsWorkflow() }
+        }
+
+        buttonRebuildInstalledStaging.setOnClickListener {
+            runInBackground { runRebuildInstalledStagingWorkflow() }
+        }
+
+        buttonImportZip.setOnClickListener {
+            appendLog("Opening document picker...")
+            importZipLauncher.launch(arrayOf("*/*"))
+        }
+
+        buttonRefreshModsPanel.setOnClickListener {
+            runInBackground { refreshInstalledModsPanel() }
+        }
+
+        buttonDeleteModTest.setOnClickListener {
+            runInBackground { runDeleteModLessonTest() }
+        }
+
+        buttonResetAppData.setOnClickListener {
+            runInBackground { runResetAppDataWorkflow() }
+        }
+
+        buttonRefreshDashboard.setOnClickListener {
+            runInBackground { refreshDashboard() }
+        }
+
+        buttonToggleLessonTools.setOnClickListener {
+            lessonToolsVisible = !lessonToolsVisible
+            lessonToolsContainer.visibility =
+                if (lessonToolsVisible) android.view.View.VISIBLE else android.view.View.GONE
+
+            buttonToggleLessonTools.text =
+                if (lessonToolsVisible) "Hide Lesson / Test Tools" else "Show Lesson / Test Tools"
+        }
+
+        buttonInstalledRecordTest.setOnClickListener {
+            runInBackground { runInstalledRecordLessonTest() }
+        }
+
+        appendLog("UI ready. Use the workflow buttons or manage installed mods below.")
+        runInBackground { refreshDashboard() }
     }
 
     private fun runInBackground(block: () -> Unit) {
@@ -108,12 +213,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun runSmokeTest() {
-        val baseDir = getExternalFilesDir(null)
-
-        if (baseDir == null) {
-            appendError("Base directory is null")
-            return
-        }
+        val baseDir = filesDir
 
         val tempDir = File(baseDir, "temp")
         val modsDir = File(baseDir, "mods")
@@ -171,12 +271,10 @@ class MainActivity : ComponentActivity() {
         tempDir.mkdirs()
         modsDir.mkdirs()
 
-        val archive = File(baseDir, "SkyUI.zip")
-
         try {
-            copyAssetToInternalStorage("SkyUI.zip", archive)
+            val archive = createTestArchiveZip(baseDir)
 
-            appendLog("Archive copied to: ${archive.absolutePath}")
+            appendLog("Generated archive at: ${archive.absolutePath}")
             appendLog("Archive exists: ${archive.exists()}")
             appendLog("Archive canRead: ${archive.canRead()}")
 
@@ -200,14 +298,6 @@ class MainActivity : ComponentActivity() {
         }
 
         appendLog("----- ModExtractor Lesson Test End -----")
-    }
-
-    private fun copyAssetToInternalStorage(assetName: String, destinationFile: File) {
-        assets.open(assetName).use { inputStream ->
-            destinationFile.outputStream().use { outputStream ->
-                inputStream.copyTo(outputStream)
-            }
-        }
     }
 
     private fun createLooseTestMod(modsDir: File): File {
@@ -898,24 +988,26 @@ class MainActivity : ComponentActivity() {
 
         return mods
     }
+
     private fun runModStateLessonTest() {
         appendLog("----- Mod State Lesson Test Start -----")
 
-        val baseDir = getExternalFilesDir(null)
-        if (baseDir == null) {
+        val externalBaseDir = getExternalFilesDir(null)
+        if (externalBaseDir == null) {
             appendError("External files directory is null")
             appendLog("RESULT: FAIL")
             appendLog("----- Mod State Lesson Test End -----")
             return
         }
 
-        val modsDir = File(baseDir, "mods")
-        val stateDir = File(baseDir, "state")
+        val modsDir = File(filesDir, "mods")
+        val stateDir = File(externalBaseDir, "state")
         val stateFile = File(stateDir, "installed_mods.json")
 
         modsDir.mkdirs()
         stateDir.mkdirs()
 
+        createArchiveStyleTestMod(modsDir, "ArchiveStateTestMod")
         createLooseTestMod(modsDir)
         createOverwriteTestMod(modsDir)
 
@@ -932,6 +1024,8 @@ class MainActivity : ComponentActivity() {
             val repository = ModStateRepository(stateFile)
 
             repository.saveMods(modsToSave)
+
+            appendLog("Saved mod count: ${modsToSave.size}")
             appendLog("State file absolute path: ${stateFile.absolutePath}")
             appendLog("State file exists: ${stateFile.exists()}")
             appendLog("State file contents:")
@@ -962,5 +1056,799 @@ class MainActivity : ComponentActivity() {
         }
 
         appendLog("----- Mod State Lesson Test End -----")
+    }
+
+    private fun createTestArchiveZip(baseDir: File): File {
+        val zipFile = File(baseDir, "SkyUI.zip")
+
+        if (zipFile.exists()) {
+            zipFile.delete()
+        }
+
+        ZipOutputStream(zipFile.outputStream()).use { zos ->
+            addZipEntry(zos, "SkyUI/")
+            addZipEntry(zos, "SkyUI/fomod/")
+            addZipEntry(zos, "SkyUI/fomod/info.xml", "<fomod><name>SkyUI Test</name></fomod>")
+            addZipEntry(zos, "SkyUI/fomod/script.cs", "// fake fomod script")
+            addZipEntry(zos, "SkyUI/fomod/screenshot.jpg", "fake screenshot bytes")
+            addZipEntry(zos, "SkyUI/SkyUI.bsa", "fake bsa data")
+            addZipEntry(zos, "SkyUI/SkyUI.esp", "fake esp data")
+        }
+
+        return zipFile
+    }
+    private fun addZipEntry(zos: ZipOutputStream, entryName: String, content: String? = null) {
+        val entry = ZipEntry(entryName)
+        zos.putNextEntry(entry)
+
+        if (content != null) {
+            zos.write(content.toByteArray())
+        }
+
+        zos.closeEntry()
+    }
+
+    private fun createArchiveStyleTestMod(modsDir: File, modName: String = "ArchiveStateTestMod"): File {
+        val modDir = File(modsDir, modName)
+
+        if (modDir.exists()) {
+            modDir.deleteRecursively()
+        }
+
+        File(modDir, "fomod").mkdirs()
+
+        File(modDir, "fomod/info.xml")
+            .writeText("<fomod><name>$modName</name></fomod>")
+
+        File(modDir, "fomod/script.cs")
+            .writeText("// fake fomod script")
+
+        File(modDir, "fomod/screenshot.jpg")
+            .writeText("fake screenshot bytes")
+
+        File(modDir, "$modName.bsa")
+            .writeText("fake bsa data")
+
+        File(modDir, "$modName.esp")
+            .writeText("fake esp data")
+
+        return modDir
+    }
+
+    private fun runModEngineLessonTest() {
+        appendLog("----- ModEngine Lesson Test Start -----")
+
+        val externalBaseDir = getExternalFilesDir(null)
+        if (externalBaseDir == null) {
+            appendError("External files directory is null")
+            appendLog("RESULT: FAIL")
+            appendLog("----- ModEngine Lesson Test End -----")
+            return
+        }
+
+        val internalBaseDir = filesDir
+
+        val tempDir = File(internalBaseDir, "temp")
+        val modsDir = File(internalBaseDir, "mods")
+        val stagingDir = File(internalBaseDir, "staging")
+        val stateDir = File(externalBaseDir, "state")
+        val stateFile = File(stateDir, "installed_mods.json")
+
+        tempDir.mkdirs()
+        modsDir.mkdirs()
+        stagingDir.mkdirs()
+        stateDir.mkdirs()
+
+        try {
+            val engine = ModEngine(
+                tempDir = tempDir,
+                modsDir = modsDir,
+                stagingDir = stagingDir,
+                stateFile = stateFile
+            )
+
+            val archive = createTestArchiveZip(internalBaseDir)
+            val archiveMod = engine.installArchive(archive, priority = 10)
+
+            val looseDir = createLooseTestMod(modsDir)
+            val overwriteDir = createOverwriteTestMod(modsDir)
+
+            val looseMod = engine.buildModFromInstalledFolder(looseDir, priority = 20)
+            val overwriteMod = engine.buildModFromInstalledFolder(overwriteDir, priority = 30)
+
+            val mods = listOf(archiveMod, looseMod, overwriteMod)
+
+            engine.saveMods(mods)
+            appendLog("Saved mods through ModEngine.")
+
+            val loadedMods = engine.loadMods()
+            appendLog("Loaded mods through ModEngine: ${loadedMods.size}")
+
+            for (mod in loadedMods) {
+                appendLog("ENGINE LOADED MOD: $mod")
+            }
+
+            val winningRecords = engine.rebuildStaging(loadedMods)
+            appendLog("Winning record count from ModEngine: ${winningRecords.size}")
+
+            val stagedIcon = File(stagingDir, "textures/ui/icon.dds")
+            if (!stagedIcon.exists()) {
+                appendError("Staged icon not found after engine rebuild.")
+                appendLog("RESULT: FAIL")
+                appendLog("----- ModEngine Lesson Test End -----")
+                return
+            }
+
+            val stagedIconContent = stagedIcon.readText()
+            appendLog("Engine staged icon content: $stagedIconContent")
+
+            if (stagedIconContent != "overwrite texture data") {
+                appendError("Engine staging produced wrong winner for textures/ui/icon.dds")
+                appendLog("RESULT: FAIL")
+            } else {
+                appendLog("Engine staging produced correct winner for textures/ui/icon.dds")
+                appendLog("State file path: ${stateFile.absolutePath}")
+                appendLog("State file exists: ${stateFile.exists()}")
+                if (stateFile.exists()) {
+                    appendLog("State file contents:")
+                    appendLog(stateFile.readText())
+                }
+                appendLog("RESULT: PASS")
+            }
+
+        } catch (e: Exception) {
+            appendError("ModEngine test failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- ModEngine Lesson Test End -----")
+    }
+
+    private fun createModEngineForWorkflows(): ModEngine? {
+        val externalBaseDir = getExternalFilesDir(null)
+        if (externalBaseDir == null) {
+            appendError("External files directory is null")
+            return null
+        }
+
+        val internalBaseDir = filesDir
+
+        val tempDir = File(internalBaseDir, "temp")
+        val modsDir = File(internalBaseDir, "mods")
+        val stagingDir = File(internalBaseDir, "staging")
+        val stateDir = File(externalBaseDir, "state")
+        val stateFile = File(stateDir, "installed_mods.json")
+
+        tempDir.mkdirs()
+        modsDir.mkdirs()
+        stagingDir.mkdirs()
+        stateDir.mkdirs()
+
+        return ModEngine(
+            tempDir = tempDir,
+            modsDir = modsDir,
+            stagingDir = stagingDir,
+            stateFile = stateFile
+        )
+    }
+
+    private fun runInstallArchiveWorkflow() {
+        appendLog("----- Install Archive Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val internalBaseDir = filesDir
+
+        try {
+            val archive = createTestArchiveZip(internalBaseDir)
+            val mod = engine.installArchiveWithRecord(
+                archive = archive,
+                priority = 10,
+                sourceType = "generated_archive"
+            )
+
+            appendLog("Installed archive mod: $mod")
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Install archive workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        refreshDashboard()
+
+        appendLog("----- Install Archive Workflow End -----")
+    }
+
+    private fun runInstallLooseWorkflow() {
+        appendLog("----- Install Loose Mods Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val modsDir = File(filesDir, "mods")
+
+        try {
+            val looseDir = createLooseTestMod(modsDir)
+            val overwriteDir = createOverwriteTestMod(modsDir)
+
+            val looseMod = engine.registerExistingInstalledFolderWithRecord(
+                modDir = looseDir,
+                priority = 20,
+                sourceType = "generated_loose"
+            )
+
+            val overwriteMod = engine.registerExistingInstalledFolderWithRecord(
+                modDir = overwriteDir,
+                priority = 30,
+                sourceType = "generated_loose"
+            )
+
+            appendLog("Installed/generated loose mod: $looseMod")
+            appendLog("Installed/generated loose mod: $overwriteMod")
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Install loose workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        refreshDashboard()
+
+        appendLog("----- Install Loose Mods Workflow End -----")
+    }
+
+    private fun runListInstalledModsWorkflow() {
+        appendLog("----- List Installed Mods Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            val mods = engine.getInstalledModsFromFolders()
+
+            appendLog("Installed mod count: ${mods.size}")
+            for (mod in mods) {
+                appendLog("INSTALLED MOD: $mod")
+            }
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("List installed mods workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- List Installed Mods Workflow End -----")
+    }
+
+    private fun runSaveInstalledModsWorkflow() {
+        appendLog("----- Save Installed Mods Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val externalBaseDir = getExternalFilesDir(null)
+        if (externalBaseDir == null) {
+            appendError("External files directory is null")
+            appendLog("RESULT: FAIL")
+            appendLog("----- Save Installed Mods Workflow End -----")
+            return
+        }
+
+        val stateFile = File(File(externalBaseDir, "state"), "installed_mods.json")
+
+        try {
+            val savedMods = engine.saveInstalledModsFromFolders()
+
+            appendLog("Saved installed mod count: ${savedMods.size}")
+            appendLog("State file path: ${stateFile.absolutePath}")
+            appendLog("State file exists: ${stateFile.exists()}")
+
+            if (stateFile.exists()) {
+                appendLog("State file contents:")
+                appendLog(stateFile.readText())
+            }
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Save installed mods workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        refreshDashboard()
+
+        appendLog("----- Save Installed Mods Workflow End -----")
+    }
+
+    private fun runLoadSavedModsWorkflow() {
+        appendLog("----- Load Saved Mods Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            val loadedMods = engine.loadMods()
+
+            appendLog("Loaded mod count: ${loadedMods.size}")
+            for (mod in loadedMods) {
+                appendLog("LOADED MOD: $mod")
+            }
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Load saved mods workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        refreshDashboard()
+
+        appendLog("----- Load Saved Mods Workflow End -----")
+    }
+
+    private fun runRebuildInstalledStagingWorkflow() {
+        appendLog("----- Rebuild Staging From Current State Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val stagingDir = File(filesDir, "staging")
+
+        try {
+            val records = engine.rebuildStagingFromCurrentState()
+
+            appendLog("Winning record count: ${records.size}")
+
+            val stagedIcon = File(stagingDir, "textures/ui/icon.dds")
+            appendLog("Staged icon exists: ${stagedIcon.exists()}")
+
+            if (stagedIcon.exists()) {
+                appendLog("Staged icon content: ${stagedIcon.readText()}")
+            }
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Rebuild staging workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Rebuild Staging From Current State Workflow End -----")
+    }
+
+    private fun copyUriToAppFile(uri: Uri, destinationFile: File) {
+        contentResolver.openInputStream(uri).use { inputStream ->
+            if (inputStream == null) {
+                throw IllegalStateException("Could not open input stream for selected file.")
+            }
+
+            destinationFile.parentFile?.mkdirs()
+
+            destinationFile.outputStream().use { outputStream ->
+                inputStream.copyTo(outputStream)
+            }
+        }
+    }
+
+    private fun handleImportedZip(uri: Uri) {
+        appendLog("----- Import ZIP Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val externalBaseDir = getExternalFilesDir(null)
+        if (externalBaseDir == null) {
+            appendError("External files directory is null")
+            appendLog("RESULT: FAIL")
+            appendLog("----- Import ZIP Workflow End -----")
+            return
+        }
+
+        val importsDir = File(externalBaseDir, "imports")
+        importsDir.mkdirs()
+
+        val importedZip = File(importsDir, "imported_mod.zip")
+
+        try {
+            copyUriToAppFile(uri, importedZip)
+
+            appendLog("Imported file copied to: ${importedZip.absolutePath}")
+            appendLog("Imported file exists: ${importedZip.exists()}")
+            appendLog("Imported file size: ${importedZip.length()} bytes")
+
+            val existingMods = engine.getInstalledModsFromFolders()
+            val nextPriority = if (existingMods.isEmpty()) 10 else (existingMods.maxOf { it.priority } + 10)
+
+            val installedMod = engine.installArchiveWithRecord(
+                archive = importedZip,
+                priority = nextPriority,
+                sourceType = "imported_zip"
+            )
+
+            val savedMods = engine.saveInstalledModsFromFolders()
+            appendLog("Saved installed mod count after import: ${savedMods.size}")
+
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Import ZIP workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        refreshDashboard()
+
+        appendLog("----- Import ZIP Workflow End -----")
+    }
+
+    private fun normalizePriorities(mods: List<Mod>): List<Mod> {
+        return mods.mapIndexed { index, mod ->
+            mod.copy(priority = (index + 1) * 10)
+        }
+    }
+
+    private fun toggleModEnabled(modId: String) {
+        val engine = createModEngineForWorkflows() ?: return
+        val mods = engine.getCurrentMods().sortedBy { it.priority }.toMutableList()
+
+        val index = mods.indexOfFirst { it.id == modId }
+        if (index == -1) {
+            appendError("Could not find mod: $modId")
+            return
+        }
+
+        mods[index] = mods[index].copy(enabled = !mods[index].enabled)
+        engine.saveCurrentMods(normalizePriorities(mods))
+
+        appendLog("Toggled enabled state for $modId")
+        refreshDashboard()
+    }
+
+    private fun moveModUp(modId: String) {
+        val engine = createModEngineForWorkflows() ?: return
+        val mods = engine.getCurrentMods().sortedBy { it.priority }.toMutableList()
+
+        val index = mods.indexOfFirst { it.id == modId }
+        if (index <= 0) {
+            appendLog("Cannot move up: $modId")
+            return
+        }
+
+        val temp = mods[index - 1]
+        mods[index - 1] = mods[index]
+        mods[index] = temp
+
+        engine.saveCurrentMods(normalizePriorities(mods))
+
+        appendLog("Moved up: $modId")
+        refreshDashboard()
+    }
+
+    private fun moveModDown(modId: String) {
+        val engine = createModEngineForWorkflows() ?: return
+        val mods = engine.getCurrentMods().sortedBy { it.priority }.toMutableList()
+
+        val index = mods.indexOfFirst { it.id == modId }
+        if (index == -1 || index >= mods.lastIndex) {
+            appendLog("Cannot move down: $modId")
+            return
+        }
+
+        val temp = mods[index + 1]
+        mods[index + 1] = mods[index]
+        mods[index] = temp
+
+        engine.saveCurrentMods(normalizePriorities(mods))
+
+        appendLog("Moved down: $modId")
+        refreshDashboard()
+    }
+
+    private fun createModRow(mod: Mod): LinearLayout {
+
+        val engine = createModEngineForWorkflows()
+        val record = engine?.loadInstalledModRecord(mod)
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, 24)
+        }
+
+        val installedSource = record?.sourceType ?: "unknown"
+        val archiveName = record?.sourceArchiveName ?: "none"
+        val installedAt = record?.installedAtEpochMillis ?: 0L
+
+        val infoText = TextView(this).apply {
+            text = buildString {
+                appendLine("Priority ${mod.priority} | ${mod.name} | ${mod.modType} | ${if (mod.enabled) "ENABLED" else "DISABLED"}")
+                appendLine("Source: $installedSource")
+                append("Archive: $archiveName")
+                if (installedAt > 0L) {
+                    append(" | InstalledAt: $installedAt")
+                }
+            }
+        }
+
+        val buttonRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val toggleButton = Button(this).apply {
+            text = if (mod.enabled) "Disable" else "Enable"
+            setOnClickListener {
+                runInBackground { toggleModEnabled(mod.id) }
+            }
+        }
+
+        val upButton = Button(this).apply {
+            text = "Up"
+            setOnClickListener {
+                runInBackground { moveModUp(mod.id) }
+            }
+        }
+
+        val downButton = Button(this).apply {
+            text = "Down"
+            setOnClickListener {
+                runInBackground { moveModDown(mod.id) }
+            }
+        }
+
+        val deleteButton = Button(this).apply {
+            text = "Delete"
+            setOnClickListener {
+                showDeleteConfirmDialog(mod)
+            }
+        }
+
+        buttonRow.addView(toggleButton)
+        buttonRow.addView(upButton)
+        buttonRow.addView(downButton)
+        buttonRow.addView(deleteButton)
+
+        row.addView(infoText)
+        row.addView(buttonRow)
+
+        return row
+    }
+
+    private fun refreshInstalledModsPanel() {
+        val engine = createModEngineForWorkflows() ?: return
+        val mods = engine.getCurrentMods().sortedBy { it.priority }
+
+        runOnUiThread {
+            installedModsContainer.removeAllViews()
+
+            if (mods.isEmpty()) {
+                val emptyText = TextView(this).apply {
+                    text = "No installed mods found."
+                }
+                installedModsContainer.addView(emptyText)
+                return@runOnUiThread
+            }
+
+            for (mod in mods) {
+                installedModsContainer.addView(createModRow(mod))
+            }
+        }
+    }
+
+    private fun deleteInstalledMod(modId: String) {
+        appendLog("----- Delete Installed Mod Workflow Start -----")
+        appendLog("Requested delete for mod: $modId")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            val result = engine.uninstallModAndApplyDiff(modId)
+
+            if (!result.removed) {
+                appendError("Could not remove mod: $modId")
+                appendLog("RESULT: FAIL")
+                appendLog("----- Delete Installed Mod Workflow End -----")
+                return
+            }
+
+            appendLog("Deleted mod: ${result.removedModId}")
+            appendLog("Staging changes after delete:")
+            appendLog("  Adds: ${result.addCount}")
+            appendLog("  Removes: ${result.removeCount}")
+            appendLog("  Updates: ${result.updateCount}")
+            appendLog("RESULT: PASS")
+
+            refreshDashboard()
+        } catch (e: Exception) {
+            appendError("Delete installed mod workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Delete Installed Mod Workflow End -----")
+    }
+
+    private fun runDeleteModLessonTest() {
+        appendLog("----- Delete Mod Lesson Test Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val stagingDir = File(filesDir, "staging")
+
+        try {
+            val modsBefore = engine.getCurrentMods().sortedBy { it.priority }
+            appendLog("Current mod count before delete: ${modsBefore.size}")
+            for (mod in modsBefore) {
+                appendLog("BEFORE DELETE MOD: $mod")
+            }
+
+            val overwriteMod = modsBefore.firstOrNull { it.id == "OverwriteTestMod" }
+            if (overwriteMod == null) {
+                appendError("OverwriteTestMod not found. Install the test mods first.")
+                appendLog("RESULT: FAIL")
+                appendLog("----- Delete Mod Lesson Test End -----")
+                return
+            }
+
+            val result = engine.uninstallModAndApplyDiff("OverwriteTestMod")
+            if (!result.removed) {
+                appendError("Failed to uninstall OverwriteTestMod")
+                appendLog("RESULT: FAIL")
+                appendLog("----- Delete Mod Lesson Test End -----")
+                return
+            }
+
+            appendLog("Delete diff stats:")
+            appendLog("  Adds: ${result.addCount}")
+            appendLog("  Removes: ${result.removeCount}")
+            appendLog("  Updates: ${result.updateCount}")
+
+            val modsAfter = engine.getCurrentMods().sortedBy { it.priority }
+            appendLog("Current mod count after delete: ${modsAfter.size}")
+            for (mod in modsAfter) {
+                appendLog("AFTER DELETE MOD: $mod")
+            }
+
+            val stagedIcon = File(stagingDir, "textures/ui/icon.dds")
+            if (!stagedIcon.exists()) {
+                appendError("Staged icon missing after delete")
+                appendLog("RESULT: FAIL")
+                appendLog("----- Delete Mod Lesson Test End -----")
+                return
+            }
+
+            val stagedIconContent = stagedIcon.readText()
+            appendLog("Staged icon content after delete: $stagedIconContent")
+
+            if (stagedIconContent != "fake texture data") {
+                appendError("Delete fallback failed. Expected LooseTestMod to win.")
+                appendLog("RESULT: FAIL")
+            } else {
+                appendLog("Delete fallback succeeded. LooseTestMod now wins.")
+                appendLog("RESULT: PASS")
+            }
+
+            refreshDashboard()
+        } catch (e: Exception) {
+            appendError("Delete mod lesson test failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Delete Mod Lesson Test End -----")
+    }
+
+    private fun getImportsDir(): File? {
+        val externalBaseDir = getExternalFilesDir(null) ?: return null
+        return File(externalBaseDir, "imports")
+    }
+
+    private fun runResetAppDataWorkflow() {
+        appendLog("----- Reset App Data Workflow Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val importsDir = getImportsDir()
+
+        if (importsDir == null) {
+            appendError("Imports directory could not be created.")
+            appendLog("RESULT: FAIL")
+            appendLog("----- Reset App Data Workflow End -----")
+            return
+        }
+
+        try {
+            appendLog("Reset will remove mods, staging, temp, imports, and saved state.")
+
+            val success = engine.resetAllAppData(importsDir)
+
+            if (!success) {
+                appendError("Engine reset failed.")
+                appendLog("RESULT: FAIL")
+                appendLog("----- Reset App Data Workflow End -----")
+                return
+            }
+
+            appendLog("App data reset completed.")
+            appendLog("Mods dir exists after reset: ${File(filesDir, "mods").exists()}")
+            appendLog("Staging dir exists after reset: ${File(filesDir, "staging").exists()}")
+
+            val externalBaseDir = getExternalFilesDir(null)
+            if (externalBaseDir != null) {
+                val stateFile = File(File(externalBaseDir, "state"), "installed_mods.json")
+                appendLog("State file exists after reset: ${stateFile.exists()}")
+            }
+
+            refreshDashboard()
+            appendLog("Installed mods panel refreshed.")
+            appendLog("RESULT: PASS")
+        } catch (e: Exception) {
+            appendError("Reset app data workflow failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        appendLog("----- Reset App Data Workflow End -----")
+    }
+
+    private fun refreshSummaryPanel() {
+        val engine = createModEngineForWorkflows() ?: return
+
+        val mods = engine.getCurrentMods().sortedBy { it.priority }
+        val installedCount = mods.size
+        val enabledCount = mods.count { it.enabled }
+        val savedStateExists = engine.hasSavedState()
+
+        val stateSourceText = when {
+            savedStateExists -> "Saved state present"
+            installedCount > 0 -> "Using folder-discovered state"
+            else -> "No current mod state"
+        }
+
+        val highestPriorityMod = mods.lastOrNull()?.name ?: "None"
+
+        val summaryText = buildString {
+            appendLine("Installed mods: $installedCount")
+            appendLine("Enabled mods: $enabledCount")
+            appendLine("State source: $stateSourceText")
+            appendLine("Highest priority mod: $highestPriorityMod")
+        }
+
+        runOnUiThread {
+            summaryTextView.text = summaryText
+        }
+    }
+
+    private fun refreshDashboard() {
+        refreshSummaryPanel()
+        refreshInstalledModsPanel()
+        appendLog("Dashboard refreshed.")
+    }
+
+    private fun showDeleteConfirmDialog(mod: Mod) {
+        runOnUiThread {
+            AlertDialog.Builder(this)
+                .setTitle("Delete Mod")
+                .setMessage(
+                    "Are you sure you want to delete '${mod.name}'?\n\n" +
+                            "This will permanently remove the installed mod folder and update staging."
+                )
+                .setPositiveButton("Delete") { _, _ ->
+                    runInBackground { deleteInstalledMod(mod.id) }
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+
+    private fun runInstalledRecordLessonTest() {
+        appendLog("----- Installed Record Lesson Test Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+
+        try {
+            runInstallArchiveWorkflow()
+            runInstallLooseWorkflow()
+
+            val mods = engine.getCurrentMods().sortedBy { it.priority }
+            appendLog("Current mod count: ${mods.size}")
+
+            for (mod in mods) {
+                val record = engine.loadInstalledModRecord(mod)
+                appendLog("MOD: $mod")
+                appendLog("RECORD: $record")
+            }
+
+            val recordsLoaded = mods.count { engine.loadInstalledModRecord(it) != null }
+
+            if (recordsLoaded == mods.size && mods.isNotEmpty()) {
+                appendLog("All installed mods have metadata records.")
+                appendLog("RESULT: PASS")
+            } else {
+                appendLog("Some installed mods are missing metadata records.")
+                appendLog("RESULT: FAIL")
+            }
+        } catch (e: Exception) {
+            appendError("Installed record lesson test failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        refreshDashboard()
+        appendLog("----- Installed Record Lesson Test End -----")
     }
 }
