@@ -215,6 +215,12 @@
                     android:layout_height="wrap_content"
                     android:text="Run Installed Record Test" />
 
+                <Button
+                    android:id="@+id/buttonDeployScopeTest"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Run Deploy Scope Test" />
+
             </LinearLayout>
 
 

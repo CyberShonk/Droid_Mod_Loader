@@ -19,6 +19,8 @@ import com.shonkware.droidmodloader.engine.build.FileChange
 import com.shonkware.droidmodloader.engine.build.StagingManager
 import com.shonkware.droidmodloader.engine.data.ModStateRepository
 import com.shonkware.droidmodloader.engine.ModEngine
+import com.shonkware.droidmodloader.engine.model.DeployScope
+import com.shonkware.droidmodloader.engine.rules.DeployFileClassifier
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import android.net.Uri
@@ -84,6 +86,7 @@ class MainActivity : ComponentActivity() {
         val buttonDeleteModTest: Button = findViewById(R.id.buttonDeleteModTest)
         val buttonResetAppData: Button = findViewById(R.id.buttonResetAppData)
         val buttonInstalledRecordTest: Button = findViewById(R.id.buttonInstalledRecordTest)
+        val buttonDeployScopeTest: Button = findViewById(R.id.buttonDeployScopeTest)
 
         buttonSmokeTest.setOnClickListener {
             runInBackground { runSmokeTest() }
@@ -181,6 +184,10 @@ class MainActivity : ComponentActivity() {
 
         buttonInstalledRecordTest.setOnClickListener {
             runInBackground { runInstalledRecordLessonTest() }
+        }
+
+        buttonDeployScopeTest.setOnClickListener {
+            runInBackground { runDeployScopeLessonTest() }
         }
 
         appendLog("UI ready. Use the workflow buttons or manage installed mods below.")
@@ -1851,4 +1858,103 @@ class MainActivity : ComponentActivity() {
         refreshDashboard()
         appendLog("----- Installed Record Lesson Test End -----")
     }
+
+    private fun createDeployScopeTestMod(modsDir: File): File {
+        val modDir = File(modsDir, "DeployScopeTestMod")
+
+        if (modDir.exists()) {
+            modDir.deleteRecursively()
+        }
+
+        File(modDir, "Data/Textures/UI").mkdirs()
+        File(modDir, "fomod").mkdirs()
+        File(modDir, "Docs").mkdirs()
+
+        File(modDir, "Data/Textures/UI/scope_test.dds")
+            .writeText("deploy this texture")
+
+        File(modDir, "fomod/info.xml")
+            .writeText("<fomod><name>DeployScopeTestMod</name></fomod>")
+
+        File(modDir, "readme.txt")
+            .writeText("do not deploy this")
+
+        File(modDir, "plugins.txt")
+            .writeText("*DeployScopeTestMod.esp")
+
+        File(modDir, "d3d11.dll")
+            .writeText("root file placeholder")
+
+        return modDir
+    }
+    private fun runDeployScopeLessonTest() {
+        appendLog("----- Deploy Scope Lesson Test Start -----")
+
+        val engine = createModEngineForWorkflows() ?: return
+        val modsDir = File(filesDir, "mods")
+        val stagingDir = File(filesDir, "staging")
+
+        try {
+            val testDir = createDeployScopeTestMod(modsDir)
+
+            val mod = engine.registerExistingInstalledFolderWithRecord(
+                modDir = testDir,
+                priority = 10,
+                sourceType = "generated_loose"
+            )
+
+            engine.saveCurrentMods(listOf(mod))
+
+            val scannedFiles = engine.scanMod(mod)
+            appendLog("Scanned file count: ${scannedFiles.size}")
+
+            val classified = engine.classifyModFiles(scannedFiles)
+
+            for (scope in DeployScope.values()) {
+                val filesForScope = classified[scope].orEmpty()
+                appendLog("$scope count: ${filesForScope.size}")
+                for (file in filesForScope) {
+                    appendLog("  $scope -> ${file.normalizedPath}")
+                }
+            }
+
+            val winningRecords = engine.rebuildStagingFromCurrentState()
+            appendLog("Winning record count: ${winningRecords.size}")
+
+            val stagedDataFile = File(stagingDir, "textures/ui/scope_test.dds")
+            val stagedFomodFile = File(stagingDir, "fomod/info.xml")
+            val stagedReadme = File(stagingDir, "readme.txt")
+            val stagedPluginsTxt = File(stagingDir, "plugins.txt")
+            val stagedRootDll = File(stagingDir, "d3d11.dll")
+
+            appendLog("stagedDataFile exists: ${stagedDataFile.exists()}")
+            appendLog("stagedFomodFile exists: ${stagedFomodFile.exists()}")
+            appendLog("stagedReadme exists: ${stagedReadme.exists()}")
+            appendLog("stagedPluginsTxt exists: ${stagedPluginsTxt.exists()}")
+            appendLog("stagedRootDll exists: ${stagedRootDll.exists()}")
+
+            val passed =
+                stagedDataFile.exists() &&
+                        !stagedFomodFile.exists() &&
+                        !stagedReadme.exists() &&
+                        !stagedPluginsTxt.exists() &&
+                        !stagedRootDll.exists()
+
+            if (passed) {
+                appendLog("Deploy scope filtering worked.")
+                appendLog("RESULT: PASS")
+            } else {
+                appendLog("Deploy scope filtering failed.")
+                appendLog("RESULT: FAIL")
+            }
+
+        } catch (e: Exception) {
+            appendError("Deploy scope lesson test failed: ${e.message}", e)
+            appendLog("RESULT: FAIL")
+        }
+
+        refreshDashboard()
+        appendLog("----- Deploy Scope Lesson Test End -----")
+    }
+
 }

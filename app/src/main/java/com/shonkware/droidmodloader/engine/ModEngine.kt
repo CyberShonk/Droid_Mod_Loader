@@ -13,6 +13,8 @@ import com.shonkware.droidmodloader.engine.model.FileRecord
 import com.shonkware.droidmodloader.engine.model.Mod
 import com.shonkware.droidmodloader.engine.model.ModFile
 import com.shonkware.droidmodloader.engine.model.ModType
+import com.shonkware.droidmodloader.engine.model.DeployScope
+import com.shonkware.droidmodloader.engine.rules.DeployFileClassifier
 import java.io.File
 
 data class UninstallResult(
@@ -35,6 +37,7 @@ class ModEngine(
     private val stagingManager = StagingManager(stagingDir)
     private val stateRepository = ModStateRepository(stateFile)
     private val installedModRecordRepository = InstalledModRecordRepository()
+    private val deployFileClassifier = DeployFileClassifier()
 
     fun installArchive(archive: File, priority: Int, enabled: Boolean = true): Mod {
         val extractedDir = extractor.extractArchive(archive)
@@ -80,7 +83,8 @@ class ModEngine(
 
     fun resolve(mods: List<Mod>): List<FileRecord> {
         val modFiles = scanMods(mods)
-        return resolver.resolve(mods, modFiles)
+        val deployableModFiles = filterDeployableModFiles(modFiles)
+        return resolver.resolve(mods, deployableModFiles)
     }
 
     fun rebuildStaging(mods: List<Mod>): List<FileRecord> {
@@ -326,5 +330,18 @@ class ModEngine(
         return results
     }
 
+    fun getDeployScopeForPath(normalizedPath: String): DeployScope {
+        return deployFileClassifier.classify(normalizedPath)
+    }
 
+    fun classifyModFiles(modFiles: List<ModFile>): Map<DeployScope, List<ModFile>> {
+        return modFiles.groupBy { deployFileClassifier.classify(it.normalizedPath) }
+    }
+
+    fun filterDeployableModFiles(modFiles: List<ModFile>): List<ModFile> {
+        return modFiles.filter {
+            val scope = deployFileClassifier.classify(it.normalizedPath)
+            deployFileClassifier.isDeployableToCurrentStaging(scope)
+        }
+    }
 }
