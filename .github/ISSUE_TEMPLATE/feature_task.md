@@ -1,51 +1,23 @@
 ---
-name: Feature task
-about: Plan a scoped feature or improvement
-title: "Task: "
-labels: task
+name: Feature request
+about: Suggest a focused Droid Mod Loader improvement
+title: "[Feature] "
+labels: enhancement
 assignees: ""
 ---
 
-## Requirement IDs
-
-Example:
-
-- REQ-DEPLOY-001
-
 ## Problem
 
-What user or project problem does this solve?
+What user problem would this solve?
 
-## Desired Behavior
+## Suggested behavior
 
-What should the app do?
+What should DML do differently?
 
-## Scope
+## Game or Android setup
 
-What should change?
+Which game, device, or compatibility environment matters to this request?
 
-## Out of Scope
+## Safety or compatibility concerns
 
-What should not change?
-
-## Files Likely Affected
-
-- `app/src/main/java/...`
-
-## Implementation Notes
-
-Important constraints, risks, or design notes.
-
-## Test Steps
-
-1.
-2.
-3.
-
-## Done When
-
-- [ ] Implementation complete
-- [ ] Manual test complete
-- [ ] Automated test added if appropriate
-- [ ] Docs updated if needed
-- [ ] Changelog updated if user-facing
+Describe any storage, deployment, archive, plugin, or recovery risks you know about.

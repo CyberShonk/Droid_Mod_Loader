@@ -4,15 +4,15 @@ Use this template for GitHub, Nexus Mods, Discord, or public APK upload notes.
 
 ## Version
 
-v0.x.y-beta
+`v0.x.y-beta`
 
 ## Date
 
-YYYY-MM-DD
+`YYYY-MM-DD`
 
 ## Summary
 
-Short plain-English summary of the release.
+Short plain English summary of the release.
 
 Example:
 
@@ -50,6 +50,6 @@ Tested:
 - [ ] Plugin scan
 - [ ] Plugin export
 - [ ] Deployment plan
-- [ ] Safe-folder deployment
+- [ ] Safe folder deployment
 - [ ] Diagnostics
 - [ ] Recovery warning behavior

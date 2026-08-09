@@ -1,148 +1,106 @@
 # Droid Mod Loader Troubleshooting
 
-This document lists common Droid Mod Loader problems and likely fixes.
+## DML cannot use my game folder
 
-## App Cannot See My Game Folder
+Check these first:
 
-Possible causes:
+1. Confirm DML has Android **Manage all files** access.
+2. Use a shared storage path that DML can read and write directly.
+3. Confirm you selected the correct game `Data` folder and Game Root for the active profile.
+4. Do not select another application's protected private `Android/data` directory.
+5. Select the folder again if the profile came from an older DML build that used URI storage.
 
-- Android storage permission issue
-- wrong folder selected
-- folder is inside app-private storage
-- GameNative folder is not shared correctly
-- selected folder is not readable
+Android may protect another application's private storage even when DML has
+all files access.
 
-Try:
+## The deployment target is rejected
 
-1. Re-select the target folder.
-2. Confirm the folder is in shared storage.
-3. Confirm the folder contains the expected game files.
-4. Restart the app.
-5. Check diagnostics.
+DML distinguishes Data and Game Root and checks game markers before physical
+deployment.
 
-## Deployment Target Looks Wrong
+A target can be rejected because it:
 
-Possible causes:
+- belongs to another supported game;
+- uses the wrong target role;
+- is a broad storage parent instead of a game folder;
+- cannot be read or written safely; or
+- does not match the selected Data/Game Root installation pair.
 
-- selected the wrong folder
-- selected game root when Data folder was expected
-- selected Data folder when game root was expected
-- selected a parent folder that is too broad
+Stop and select the intended folders rather than bypassing the warning.
 
-Try:
+## A mod imports but does not appear in the game
 
-1. Stop before deploying.
-2. Check whether the app expects Data-folder or game-root deployment.
-3. Re-select the target folder.
-4. Check diagnostics.
+Check:
 
-## Mods Import But Do Not Affect the Game
+1. The mod installation completed successfully.
+2. The mod is enabled in the active profile.
+3. The active profile points to the intended game folders.
+4. The mod's files are deployable game content rather than documentation or other files used only by the manager.
+5. A normal deployment completed after the mod state changed.
+6. Any plugin supplied by the mod is enabled when required.
 
-Possible causes:
+If the physical target was changed outside DML and its state is uncertain, use
+the available recovery or full redeploy tools rather than assuming the existing
+manifest proves every physical file is still correct.
 
-- mod is disabled
-- plugin is disabled
-- files were imported but not deployed
-- deployment target is wrong
-- archive layout was not detected correctly
-- plugin output files were not exported or copied where needed
+## A plugin is missing or has the wrong order
 
-Try:
+Confirm the enabled mod actually contains the plugin and that the plugin is
+supported by the selected game.
 
-1. Confirm the mod is enabled.
-2. Confirm the plugin is enabled if the mod has one.
-3. Rebuild or rerun deployment.
-4. Check plugin output.
-5. Check diagnostics.
+For Skyrim Legendary Edition, inspect `plugins.txt` and `loadorder.txt` behavior.
+For Oblivion, Fallout 3, Fallout: New Vegas, and TTW, ordering is applied through
+plugin modification timestamps and requires a writable Data folder.
 
-## Plugin Does Not Show Up
+Review DML's plugin warnings before changing files manually.
 
-Possible causes:
+## DML reports an unfinished deployment
 
-- plugin file is not inside the archive layout the app expects
-- plugin file is disabled
-- plugin belongs to a disabled mod
-- plugin extension is unsupported for the selected game
-- plugin scan needs to be refreshed
+An unfinished journal means the previous deployment may not have completed
+cleanly.
 
-Try:
+1. Review the warning before starting another deployment.
+2. Confirm the active profile and selected target are the ones you intend to repair.
+3. Use DML's recovery or full redeploy tools when appropriate.
+4. Do not manually delete deployment state just to remove the warning.
 
-1. Confirm the mod contains `.esm`, `.esp`, or `.esl`.
-2. Confirm the mod is enabled.
-3. Rescan plugins if the option exists.
-4. Re-import the mod if archive layout was wrong.
-5. Check diagnostics.
+An unfinished deployment record is safety information. Preserve it until you
+understand the interrupted operation.
 
-## Game Crashes After Deployment
+## An archive is rejected
 
-Possible causes:
+DML identifies archive format from its signature, not just the filename.
 
-- missing master
-- wrong plugin order
-- incompatible mod
-- files deployed to the wrong folder
-- manual files conflict with managed files
-- bad archive layout
-- unsupported game setup
+Common unsupported cases include:
 
-Try:
+- RAR5 installation;
+- archives protected by a password or encrypted archives;
+- multipart RAR archives; and
+- uncommon unsupported 7z variants.
 
-1. Disable the newest mod.
-2. Check plugin warnings.
-3. Check for missing masters.
-4. Use a safe profile.
-5. Redeploy.
-6. Restore from backup if needed.
+A large archive is not automatically invalid. If an install crashes or exits,
+report the actual format and any diagnostics rather than assuming file size was
+the cause.
 
-## App Warns About Unfinished Deployment
+## The game crashes after deployment
 
-This means a previous deployment may not have completed cleanly.
+A successful file copy does not guarantee that a mod list is valid for the game.
+Check for missing masters, incompatible mods, plugin order problems, wrong target
+selection, and unmanaged/manual files that conflict with the managed setup.
 
-Possible causes:
+Test changes with backups and a disposable profile or a profile known to work
+where practical.
 
-- app was closed during deployment
-- device killed the app
-- storage write failed
-- target folder disconnected or changed
+## Reporting a problem
 
-Try:
+Include:
 
-1. Do not ignore the warning.
-2. Open recovery tools.
-3. Review the warning.
-4. Retry deployment or force full redeploy if appropriate.
-5. Clear the warning only after review.
-
-## Files Look Duplicated or Wrong
-
-Possible causes:
-
-- multiple mods contain the same file
-- manual files already exist in the target
-- previous deployment state is stale
-- profile was changed
-- deployment manifest is outdated
-
-Try:
-
-1. Check active profile.
-2. Check enabled mods.
-3. Review conflict information if available.
-4. Run diagnostics.
-5. Use full redeploy if the app recommends it.
-
-
-## Reporting a Problem
-
-A useful report should include:
-
-- DML version
-- device model
-- Android version
-- game
-- GameNative or other setup
-- selected target type
-- active profile
-- what you tried
-- what happened
-- screenshot or diagnostics text
+- DML version;
+- device model and Android version;
+- game and compatibility environment;
+- active profile;
+- selected target type and path class without exposing private information;
+- archive format if the problem involves installation;
+- exact reproduction steps;
+- what you expected and what happened; and
+- relevant screenshots, DML diagnostics, or logs with sensitive data removed.

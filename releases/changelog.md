@@ -1,96 +1,50 @@
 # Droid Mod Loader Changelog
 
-This file tracks user-facing release history.
-
-## Format
-
-Use this format for each release:
-
-## Version - Date
-
-### Added
-
-- New features.
-
-### Changed
-
-- Behavior changes.
-
-### Fixed
-
-- Bug fixes.
-
-### Known Issues
-
-- Problems users should know about.
-
-### Upgrade Notes
-
-- Anything users should do before or after updating.
+This file records release changes visible to users and known limitations.
 
 ## v0.8.0-beta - Unreleased
 
 ### Changed
 
-- Physical deployment preflight now identifies Data and Game Root separately,
-  validates executable and master markers for the selected game, and checks that both paths
-  belong to the same installation.
-- Target diagnostics now include target type, canonical path, validation status,
-  and structured findings.
-- A clean Fallout New Vegas target remains valid for an initial Tale of Two
-  Wastelands deployment; an existing TTW master is reported but not required.
-- Archive imports now identify the source format and confirm reader support
-  before copying into DML's managed archive library.
-- Archive diagnostics distinguish RAR4 and RAR5 while preserving existing
-  stored `rar` metadata compatibility.
-- ZIP and 7Z reader failure handling now provides clearer bounded-memory,
-  corruption, and cleanup behavior.
+- Physical deployment preflight distinguishes Data and Game Root, validates a bounded game marker set, rejects targets for the wrong game or targets with their roles reversed, and checks that both selected paths belong to the same installation.
+- Target diagnostics report the selected target role, canonical path, validation result, and structured findings.
+- A clean Fallout New Vegas target remains valid for an initial Tale of Two Wastelands deployment.
+- Archive imports identify source format and reader support before creating a new managed archive copy.
+- Archive diagnostics distinguish RAR4 and RAR5 while retaining compatibility with existing stored RAR metadata.
+- ZIP and 7z reader failures provide clearer corruption, bounded memory, and cleanup diagnostics.
 
 ### Fixed
 
-- Physical deployment now stops before journal creation or target writes when
-  the selected folder belongs to another supported game, uses the wrong target
-  role, is obviously too broad, or does not match the selected Data/Game Root
-  installation pair.
-- Real target selection now fails safely if the target changes after preflight
-  instead of silently falling back to simulated output.
-- Unsupported RAR5 archives and unrecognized signatures no longer create a
-  managed archive copy, archive record, or installer session before rejection.
-- Controlled archive probe and reader failures no longer use crash-style
-  diagnostics or attach an expected throwable stack trace.
-- Supported ZIP import behavior remains unchanged after preflight was moved
-  ahead of managed-library copying.
+- Physical deployment stops before writes when a selected target belongs to another supported game, uses the wrong role, is obviously too broad, or does not match the selected Data/Game Root installation pair.
+- Unsupported RAR5 archives and unrecognized signatures no longer create a new managed archive copy or installer session before rejection.
+- Controlled archive probe and reader failures no longer produce diagnostics that resemble a crash for expected unsupported input.
 
 ### Known Issues
 
-- Game target validation currently uses a bounded executable and base master
-  marker set. Guidance during folder selection and a complete distribution
-  specific marker matrix remain future work.
-- RAR5 is detected but remains unsupported for installation.
-- Password-protected or encrypted archives and multipart RAR archives remain
-  unsupported.
-- Some uncommon 7Z compression or encryption variants may remain unsupported.
+- Guidance for folder selection and the complete target marker matrix for each distribution are still limited.
+- RAR5 is detected but is not supported for installation.
+- RAR archives protected by a password, encrypted RAR archives, and multipart RAR archives are not supported.
+- Some uncommon 7z compression or encryption variants may remain unsupported.
+- Returning to a previously used deployment target does not automatically verify every physical managed file against changes made outside DML.
 
 ## v0.7.0-beta - 2026-06-29
 
 ### Added
 
 - Added Tale of Two Wastelands as a selectable profile with legacy
-  timestamp-based plugin ordering.
-- Added content-signature detection for ZIP, 7Z, RAR4, and RAR5 archives.
+  plugin ordering based on timestamps.
+- Added archive signature detection for ZIP, 7Z, RAR4, and RAR5 archives.
 - Added bounded extraction checks for unsafe paths, duplicate destinations,
   case collisions, excessive entries, oversized files, excessive total output,
   long paths, and insufficient storage headroom.
-- Added persistent installed-mod replacement transactions and automatic recovery
+- Added persistent installed mod replacement transactions and automatic recovery
   at startup and profile activation.
 - Added cooperative cancellation for archive copying, extraction, preparation,
   and installation.
-- Added a canonical `version.properties` source for release version name and
-  version code.
 
 ### Changed
 
-- Replaced production Storage Access Framework paths with one direct-filesystem
+- Replaced production Storage Access Framework paths with one direct filesystem
   backend for Game Root, `Data`, Archive Library, import, scanning, deployment,
   overwrite inspection, and plugin timestamp ordering.
 - Archive Library scanning and stored archive metadata now use detected content
@@ -100,16 +54,13 @@ Use this format for each release:
 - Archive import keeps an archive that was already registered when later
   installation is cancelled, while removing copied files that were never
   registered.
-- Split reusable activity workflows and engine responsibilities into focused
-  coordinators and services while preserving `MainActivity` as the Android
-  composition root and `ModEngine` as the stable facade.
 - The displayed app version now comes from the APK build configuration instead
   of a hardcoded UI string.
 
 ### Fixed
 
 - Prevented failed, cancelled, or partial extraction from becoming a successful
-  installed-mod state.
+  installed mod state.
 - Preserved the previous installed mod when replacement staging or promotion
   fails.
 - Recovered retained replacement transactions after interruption.
@@ -122,24 +73,24 @@ Use this format for each release:
 ### Known Issues
 
 - RAR5 is detected but is not supported for installation.
-- Password-protected or encrypted archives and multipart RAR archives are not
-  supported.
+- RAR archives protected by a password, encrypted RAR archives, and multipart
+  RAR archives are not supported.
 - Some uncommon 7Z compression or encryption variants may remain unsupported.
 - Android still blocks access to other applications' protected
   `Android/data` directories.
-- Game Root and `Data` folder validation still needs stronger game-specific
-  guidance.
+- Game Root and `Data` folder validation still needs stronger guidance
+  specific to each game.
 - Droid Mod Loader remains beta software; back up important game folders before
   testing deployment.
 
 ### Upgrade Notes
 
 - Install this version over `v0.6.0-beta`; do not uninstall the existing app
-  first if you want to retain app-managed state.
-- Android 11 and newer require all-files access for DML's shared-storage
+  first if you want to retain state managed by the app.
+- Android 11 and newer require all files access for DML's shared storage
   workflows.
 - Existing profiles and unrelated managed state are retained by the migration.
-  Legacy URI-only Game Root, `Data`, or Archive Library selections require
+  Legacy URI based Game Root, `Data`, or Archive Library selections require
   explicit reselection as direct filesystem paths.
 - Final upgrade validation from the public `v0.6.0-beta` APK is required before
   this release is published.
@@ -148,24 +99,16 @@ Use this format for each release:
 
 ### Added
 
-- Added a remembered archive-folder browser for top-level ZIP, 7Z, and RAR files.
+- Added a remembered archive folder browser for top level ZIP, 7Z, and RAR files.
 - Added archive search, manual refresh, and folder switching.
-- Added active-profile-aware Installed and Previously installed archive states.
-- Added focused tests for archive-folder scanning and archive-browser workflow behavior.
+- Added Installed and Previously installed archive states that follow the active profile.
 
 ### Changed
 
 - Install Mod now asks for an archive folder on first use and opens the remembered folder directly afterward.
 - Archive files selected from the folder browser now use the existing archive import and installer pipeline.
 - Archives available to install are shown before currently installed archives, with newest files first in each group.
-- Main-screen and fullscreen-list scroll positions are retained during the current app session.
-- Continued extracting cohesive responsibilities from `MainActivity` without intentionally changing existing mod-management behavior.
-- Updated architecture, requirements, testing, decisions, user-guide, and current-priority documentation for the archive-folder workflow.
-
-### Fixed
-
-- Removed the duplicate archive-library installation implementation.
-- Fixed recursive Kotlin type inference in the archive workflow wiring.
+- Main screen and full screen list scroll positions are retained during the current app session.
 
 ### Known Issues
 
@@ -178,61 +121,13 @@ Use this format for each release:
 - Existing users can install this version over `v0.5.5-beta`.
 - The first time you tap Install Mod, select the folder where you keep downloaded mod archives.
 - DML reads the original archive from that folder and keeps its own managed copy when the mod is installed.
-- Existing profiles and installed-mod records should remain available after upgrading.
+- Existing profiles and installed mod records should remain available after upgrading.
 
 ## v0.5.5-beta
 
-### Added
-
-- Project vision documentation.
-- Requirements documentation.
-- Brand asset documentation.
-- Handmade icon source tracking.
-- Android launcher icon assets.
-- Project documentation index.
-- Architecture documentation.
-- Decision log.
-- Testing documentation.
-- Release checklist.
-- Development loop documentation.
-- Pull request checklist template.
-- Expanded decision log rules and core accepted decisions.
-- Source map documentation for major app files and engine areas.
-- JVM unit tests for path normalization, deploy file classification, mod display name cleanup, and plugin discovery.
-- Starter user guide.
-- Troubleshooting documentation.
-- Glossary for DML and modding terms.
-- Versioning documentation.
-- Public release notes template.
-- APK upload checklist template.
-- Git workflow documentation.
-- Local project check scripts.
-- Documentation structure check script.
-- Release notes preparation script.
-- GitHub Actions CI for unit tests, debug builds, and documentation checks.
-- Added unit coverage for archive metadata tracking, Nexus URL parsing, and archive metadata summaries.
-- Added a Developer Tools action to print the saved archive library metadata summary without changing files.
-- Added a pre-push documentation gate so project docs stay current before GitHub pushes.
-- Continued release-readiness cleanup for the archive import/download metadata path.
-
-### Changed
-
-- README now links to project documentation.
-- Expanded architecture documentation maintenance rules.
-- Clarified versionName, versionCode, APK filename, and changelog expectations.
-- Expanded release checklist links to release templates and versioning documentation.
-- Documented Bazzite terminal setup notes for Gradle, Java/JBR, and executable Gradle wrapper usage.
-- Added repository automation to catch missing docs, committed artifacts, and failing unit tests earlier.
-
-### Fixed
-
-- Removed accidental documentation backup file.
+Early beta foundations for archive metadata, diagnostics, and launcher branding.
 
 ### Known Issues
 
-- Release checklist is still being formalized.
-- Recovery tools and unfinished deploy warnings still need more polish.
-
-### Upgrade Notes
-
+- Recovery and unfinished deployment handling were still incomplete.
 - Back up important game folders before testing deployment features.
