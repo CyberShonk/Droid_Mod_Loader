@@ -16,6 +16,9 @@ This file records release changes visible to users and known limitations.
 ### Fixed
 
 - Physical deployment stops before writes when a selected target belongs to another supported game, uses the wrong role, is obviously too broad, or does not match the selected Data/Game Root installation pair.
+- Deployment state is kept separate for each selected Data and Game Root target, so switching installations does not reuse another target's saved deployment state.
+- Returning to a previously used target reuses that target's own saved deployment state.
+- Unfinished deployment state is no longer silently replaced when another deployment starts.
 - Unsupported RAR5 archives and unrecognized signatures no longer create a new managed archive copy or installer session before rejection.
 - Controlled archive probe and reader failures no longer produce diagnostics that resemble a crash for expected unsupported input.
 

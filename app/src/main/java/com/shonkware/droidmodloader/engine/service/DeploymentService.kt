@@ -8,12 +8,15 @@ import com.shonkware.droidmodloader.engine.deploy.DeploymentTargetIdentity
 import com.shonkware.droidmodloader.engine.deploy.GameTargetType
 import com.shonkware.droidmodloader.engine.deploy.GameTargetValidationSeverity
 import com.shonkware.droidmodloader.engine.deploy.GameTargetValidator
+import com.shonkware.droidmodloader.engine.deploy.ResolvedDeploymentTarget
+import com.shonkware.droidmodloader.engine.deploy.ResolvedDeploymentTargets
 import com.shonkware.droidmodloader.engine.deploy.ScopedDeploymentResult
 import com.shonkware.droidmodloader.engine.deploy.journal.DeploymentJournalPlanSummary
 import com.shonkware.droidmodloader.engine.deploy.journal.DeploymentJournalRecord
 import com.shonkware.droidmodloader.engine.deploy.journal.DeploymentJournalRepository
 import com.shonkware.droidmodloader.engine.deploy.journal.DeploymentJournalResultSummary
 import com.shonkware.droidmodloader.engine.deploy.journal.DeploymentJournalStatus
+import com.shonkware.droidmodloader.engine.deploy.journal.DeploymentJournalTargetState
 import com.shonkware.droidmodloader.engine.deploy.plan.DeploymentPlanBuilder
 import com.shonkware.droidmodloader.engine.deploy.plan.DeploymentPlanScope
 import com.shonkware.droidmodloader.engine.deploy.plan.DeploymentPreflightChecker
@@ -69,11 +72,10 @@ internal class DeploymentService(
     }
 
     fun deployForGame(gameId: String): ScopedDeploymentResult {
-        val plan = buildDeploymentPlanForGame(gameId)
-        val config = getGameDeploymentConfig(gameId)
-
+        val targets = resolveDeploymentTargets(gameId)
+        val plan = buildDeploymentPlanForTargets(targets)
         val preflight = deploymentPreflightChecker.check(
-            config = config,
+            config = targets.configSnapshot,
             plan = plan
         )
 
@@ -81,77 +83,53 @@ internal class DeploymentService(
             throw DeploymentPreflightException(preflight)
         }
 
+        requireTargetSnapshotStillCurrent(targets)
+
         val journalRepository = DeploymentJournalRepository(
             getDeploymentJournalFile(gameId)
         )
-
         val journalRecord = createStartedDeploymentJournal(
             gameId = gameId,
             plan = plan,
-            preflight = preflight
+            preflight = preflight,
+            targets = targets
         )
 
         journalRepository.saveStarted(journalRecord)
 
         try {
             val dataManifestRepository = DeploymentManifestRepository(
-                getEffectiveDeploymentManifestFile(gameId)
+                targets.data.manifestFile
             )
-
             val oldDataManifest = dataManifestRepository.load()
             val dataWinningRecords = getCurrentDataWinningRecords()
 
-            val (newDataManifest, dataResult) = deployRecordsToConfiguredTarget(
-                gameId = gameId,
-                targetType = GameTargetType.DATA,
+            val (newDataManifest, dataResult) = deployRecordsToTarget(
+                target = targets.data,
                 oldManifest = oldDataManifest,
-                newWinningRecords = dataWinningRecords,
-                realDeployEnabled = config?.realDeployEnabled == true,
-                targetPath = config?.targetDataPath ?: "",
-                fallbackRootDir = deployRootDir,
-                backupRootDir = getDeploymentBackupDir(
-                    gameId = gameId,
-                    scopeName = "data",
-                    rootTarget = false
-                )
+                newWinningRecords = dataWinningRecords
             )
-
             dataManifestRepository.save(newDataManifest)
 
             val rootManifestRepository = DeploymentManifestRepository(
-                getEffectiveRootDeploymentManifestFile(gameId)
+                targets.root.manifestFile
             )
-
-            val oldRootManifest = rootManifestRepository.load()
+            val oldRootManifest = loadManifestForPlan(targets.root)
             val rootWinningRecords = getCurrentRootWinningRecords()
 
-            val canDeployRoot = canDeployGameRoot(config)
-
-            val rootResult = if (canDeployRoot && (rootWinningRecords.isNotEmpty() || oldRootManifest.isNotEmpty())) {
-                val (newRootManifest, result) = deployRecordsToConfiguredTarget(
-                    gameId = gameId,
-                    targetType = GameTargetType.GAME_ROOT,
+            val rootResult = if (
+                targets.root.canDeploy &&
+                (rootWinningRecords.isNotEmpty() || oldRootManifest.isNotEmpty())
+            ) {
+                val (newRootManifest, result) = deployRecordsToTarget(
+                    target = targets.root,
                     oldManifest = oldRootManifest,
-                    newWinningRecords = rootWinningRecords,
-                    realDeployEnabled = config?.realDeployEnabled == true,
-                    targetPath = config?.targetRootPath ?: "",
-                    fallbackRootDir = getSimulatedGameRootDir(),
-                    backupRootDir = getDeploymentBackupDir(
-                        gameId = gameId,
-                        scopeName = "root",
-                        rootTarget = true
-                    )
+                    newWinningRecords = rootWinningRecords
                 )
-
                 rootManifestRepository.save(newRootManifest)
                 result
             } else {
-                DeploymentResult(
-                    addCount = 0,
-                    removeCount = 0,
-                    updateCount = 0,
-                    finalRecordCount = 0
-                )
+                emptyDeploymentResult()
             }
 
             val scopedResult = ScopedDeploymentResult(
@@ -161,15 +139,7 @@ internal class DeploymentService(
 
             journalRepository.markCompleted(
                 record = journalRecord,
-                resultSummary = DeploymentJournalResultSummary(
-                    addCount = scopedResult.addCount,
-                    updateCount = scopedResult.updateCount,
-                    removeCount = scopedResult.removeCount,
-                    backupCount = scopedResult.dataResult.backupCount + scopedResult.rootResult.backupCount,
-                    restoreCount = scopedResult.dataResult.restoreCount + scopedResult.rootResult.restoreCount,
-                    protectedConflictCount = scopedResult.dataResult.protectedConflictCount + scopedResult.rootResult.protectedConflictCount,
-                    finalRecordCount = scopedResult.finalRecordCount
-                )
+                resultSummary = scopedResult.toJournalResultSummary()
             )
 
             return scopedResult
@@ -178,18 +148,16 @@ internal class DeploymentService(
                 record = journalRecord,
                 message = e.message ?: e::class.java.name
             )
-
             throw e
         }
     }
 
 
     fun forceFullRedeployForGame(gameId: String): ScopedDeploymentResult {
-        val plan = buildFullRedeployPlanForGame(gameId)
-        val config = getGameDeploymentConfig(gameId)
-
+        val targets = resolveDeploymentTargets(gameId)
+        val plan = buildFullRedeployPlanForTargets(targets)
         val preflight = deploymentPreflightChecker.check(
-            config = config,
+            config = targets.configSnapshot,
             plan = plan
         )
 
@@ -197,94 +165,67 @@ internal class DeploymentService(
             throw DeploymentPreflightException(preflight)
         }
 
-        val rootPlanHasWork = plan.rootPlan.operationCount > 0
-        val rootCanDeploy = canDeployGameRoot(config)
-
-        if (rootPlanHasWork && !rootCanDeploy) {
+        if (plan.rootPlan.operationCount > 0 && !targets.root.canDeploy) {
             throw IllegalStateException(
                 "Full redeploy needs Game Root work, but no Game Root target is available."
             )
         }
 
+        requireTargetSnapshotStillCurrent(targets)
+
         val journalRepository = DeploymentJournalRepository(
             getDeploymentJournalFile(gameId)
         )
-
         val journalRecord = createStartedDeploymentJournal(
             gameId = gameId,
             plan = plan,
-            preflight = preflight
+            preflight = preflight,
+            targets = targets
         )
 
         journalRepository.saveStarted(journalRecord)
 
         try {
             val dataManifestRepository = DeploymentManifestRepository(
-                getEffectiveDeploymentManifestFile(gameId)
+                targets.data.manifestFile
             )
-
             val oldDataManifest = dataManifestRepository.load()
             val dataWinningRecords = getCurrentDataWinningRecords()
-
             val forcedOldDataManifest = forceManifestToRewriteCurrentWinners(
                 oldManifest = oldDataManifest,
                 currentWinners = dataWinningRecords
             )
 
-            val (newDataManifest, dataResult) = deployRecordsToConfiguredTarget(
-                gameId = gameId,
-                targetType = GameTargetType.DATA,
+            val (newDataManifest, dataResult) = deployRecordsToTarget(
+                target = targets.data,
                 oldManifest = forcedOldDataManifest,
-                newWinningRecords = dataWinningRecords,
-                realDeployEnabled = config?.realDeployEnabled == true,
-                targetPath = config?.targetDataPath ?: "",
-                fallbackRootDir = deployRootDir,
-                backupRootDir = getDeploymentBackupDir(
-                    gameId = gameId,
-                    scopeName = "data",
-                    rootTarget = false
-                )
+                newWinningRecords = dataWinningRecords
             )
-
             dataManifestRepository.save(newDataManifest)
 
             val rootManifestRepository = DeploymentManifestRepository(
-                getEffectiveRootDeploymentManifestFile(gameId)
+                targets.root.manifestFile
             )
-
-            val oldRootManifest = rootManifestRepository.load()
+            val oldRootManifest = loadManifestForPlan(targets.root)
             val rootWinningRecords = getCurrentRootWinningRecords()
 
-            val rootResult = if (rootCanDeploy && (rootWinningRecords.isNotEmpty() || oldRootManifest.isNotEmpty())) {
+            val rootResult = if (
+                targets.root.canDeploy &&
+                (rootWinningRecords.isNotEmpty() || oldRootManifest.isNotEmpty())
+            ) {
                 val forcedOldRootManifest = forceManifestToRewriteCurrentWinners(
                     oldManifest = oldRootManifest,
                     currentWinners = rootWinningRecords
                 )
-
-                val (newRootManifest, result) = deployRecordsToConfiguredTarget(
-                    gameId = gameId,
-                    targetType = GameTargetType.GAME_ROOT,
+                val (newRootManifest, result) = deployRecordsToTarget(
+                    target = targets.root,
                     oldManifest = forcedOldRootManifest,
-                    newWinningRecords = rootWinningRecords,
-                    realDeployEnabled = config?.realDeployEnabled == true,
-                    targetPath = config?.targetRootPath ?: "",
-                    fallbackRootDir = getSimulatedGameRootDir(),
-                    backupRootDir = getDeploymentBackupDir(
-                        gameId = gameId,
-                        scopeName = "root",
-                        rootTarget = true
-                    )
+                    newWinningRecords = rootWinningRecords
                 )
-
                 rootManifestRepository.save(newRootManifest)
                 result
             } else {
-                DeploymentResult(
-                    addCount = 0,
-                    removeCount = 0,
-                    updateCount = 0,
-                    finalRecordCount = 0
-                )
+                emptyDeploymentResult()
             }
 
             val scopedResult = ScopedDeploymentResult(
@@ -294,15 +235,7 @@ internal class DeploymentService(
 
             journalRepository.markCompleted(
                 record = journalRecord,
-                resultSummary = DeploymentJournalResultSummary(
-                    addCount = scopedResult.addCount,
-                    updateCount = scopedResult.updateCount,
-                    removeCount = scopedResult.removeCount,
-                    backupCount = scopedResult.dataResult.backupCount + scopedResult.rootResult.backupCount,
-                    restoreCount = scopedResult.dataResult.restoreCount + scopedResult.rootResult.restoreCount,
-                    protectedConflictCount = scopedResult.dataResult.protectedConflictCount + scopedResult.rootResult.protectedConflictCount,
-                    finalRecordCount = scopedResult.finalRecordCount
-                )
+                resultSummary = scopedResult.toJournalResultSummary()
             )
 
             return scopedResult
@@ -311,95 +244,94 @@ internal class DeploymentService(
                 record = journalRecord,
                 message = e.message ?: e::class.java.name
             )
-
             throw e
         }
     }
 
 
-    private fun deployRecordsToConfiguredTarget(
-        gameId: String,
-        targetType: GameTargetType,
+    private fun deployRecordsToTarget(
+        target: ResolvedDeploymentTarget,
         oldManifest: List<DeploymentRecord>,
-        newWinningRecords: List<FileRecord>,
-        realDeployEnabled: Boolean,
-        targetPath: String,
-        fallbackRootDir: File,
-        backupRootDir: File
+        newWinningRecords: List<FileRecord>
     ): Pair<List<DeploymentRecord>, DeploymentResult> {
-        val deployTarget = if (realDeployEnabled) {
-            val validation = gameTargetValidator.validateTarget(
-                gameId = gameId,
-                targetType = targetType,
-                path = targetPath
-            )
-            check(validation.canDeploy && validation.canonicalPath != null) {
-                buildString {
-                    append("Configured ${targetType.displayName} target failed validation after preflight")
-                    validation.findings
-                        .firstOrNull { it.severity == GameTargetValidationSeverity.ERROR }
-                        ?.let { append(": ${it.title} ${it.details}".trimEnd()) }
-                }
-            }
-            File(requireNotNull(validation.canonicalPath))
-        } else {
-            fallbackRootDir
-        }
-
         return DeploymentManager(
-            deployRootDir = deployTarget,
-            backupRootDir = backupRootDir
+            deployRootDir = target.requireDeployDirectory(),
+            backupRootDir = target.backupDirectory
         ).deploy(oldManifest, newWinningRecords)
     }
 
 
-    fun buildDeploymentPlanForGame(gameId: String): ScopedDeploymentPlan {
-        val dataManifestRepository = DeploymentManifestRepository(
-            getEffectiveDeploymentManifestFile(gameId)
-        )
-
-        val oldDataManifest = dataManifestRepository.load()
-        val dataWinningRecords = getCurrentDataWinningRecords()
-
-        val rootManifestRepository = DeploymentManifestRepository(
-            getEffectiveRootDeploymentManifestFile(gameId)
-        )
-
-        val oldRootManifest = rootManifestRepository.load()
-        val rootWinningRecords = getCurrentRootWinningRecords()
-
-        val builder = DeploymentPlanBuilder()
-
-        val dataPlan = builder.build(
-            scope = DeploymentPlanScope.DATA,
-            oldManifest = oldDataManifest,
-            newWinningRecords = dataWinningRecords
-        )
-
-        val rootPlan = builder.build(
-            scope = DeploymentPlanScope.GAME_ROOT,
-            oldManifest = oldRootManifest,
-            newWinningRecords = rootWinningRecords
-        )
-
-        return ScopedDeploymentPlan(
-            dataPlan = dataPlan,
-            rootPlan = rootPlan
+    private fun emptyDeploymentResult(): DeploymentResult {
+        return DeploymentResult(
+            addCount = 0,
+            removeCount = 0,
+            updateCount = 0,
+            finalRecordCount = 0
         )
     }
 
 
-    fun buildDeploymentPlanDebugSummary(gameId: String): String {
-        val plan = buildDeploymentPlanForGame(gameId)
-        val config = getGameDeploymentConfig(gameId)
+    private fun ScopedDeploymentResult.toJournalResultSummary(): DeploymentJournalResultSummary {
+        return DeploymentJournalResultSummary(
+            addCount = addCount,
+            updateCount = updateCount,
+            removeCount = removeCount,
+            backupCount = dataResult.backupCount + rootResult.backupCount,
+            restoreCount = dataResult.restoreCount + rootResult.restoreCount,
+            protectedConflictCount = dataResult.protectedConflictCount + rootResult.protectedConflictCount,
+            finalRecordCount = finalRecordCount
+        )
+    }
 
+
+    fun buildDeploymentPlanForGame(gameId: String): ScopedDeploymentPlan {
+        return buildDeploymentPlanForTargets(resolveDeploymentTargets(gameId))
+    }
+
+
+    private fun buildDeploymentPlanForTargets(
+        targets: ResolvedDeploymentTargets
+    ): ScopedDeploymentPlan {
+        val oldDataManifest = loadManifestForPlan(targets.data)
+        val dataWinningRecords = getCurrentDataWinningRecords()
+        val oldRootManifest = loadManifestForPlan(targets.root)
+        val rootWinningRecords = getCurrentRootWinningRecords()
+        val builder = DeploymentPlanBuilder()
+
+        return ScopedDeploymentPlan(
+            dataPlan = builder.build(
+                scope = DeploymentPlanScope.DATA,
+                oldManifest = oldDataManifest,
+                newWinningRecords = dataWinningRecords
+            ),
+            rootPlan = builder.build(
+                scope = DeploymentPlanScope.GAME_ROOT,
+                oldManifest = oldRootManifest,
+                newWinningRecords = rootWinningRecords
+            )
+        )
+    }
+
+
+    private fun loadManifestForPlan(target: ResolvedDeploymentTarget): List<DeploymentRecord> {
+        if (!target.canDeploy) return emptyList()
+        return DeploymentManifestRepository(target.manifestFile).load()
+    }
+
+
+    fun buildDeploymentPlanDebugSummary(gameId: String): String {
+        val targets = resolveDeploymentTargets(gameId)
+        val plan = buildDeploymentPlanForTargets(targets)
         val preflight = deploymentPreflightChecker.check(
-            config = config,
+            config = targets.configSnapshot,
             plan = plan
         )
 
         return buildString {
-            appendLine(buildDeploymentPlanContextSummary(gameId, config, plan))
+            appendLine(buildDeploymentPlanContextSummary(gameId, targets.configSnapshot, plan))
+            appendLine()
+            appendLine(targets.data.toDebugSummary())
+            appendLine(targets.root.toDebugSummary())
             appendLine()
             appendLine(plan.toDebugSummary())
             appendLine()
@@ -448,22 +380,6 @@ internal class DeploymentService(
     }
 
 
-    private fun canDeployGameRoot(config: GameDeploymentConfig?): Boolean {
-        if (config == null) return true
-
-        if (!config.realDeployEnabled) {
-            return true
-        }
-
-        return !config.rootPathReselectionRequired &&
-                gameTargetValidator.validateTarget(
-                    gameId = config.gameId,
-                    targetType = GameTargetType.GAME_ROOT,
-                    path = config.targetRootPath
-                ).canDeploy
-    }
-
-
     private fun getSimulatedGameRootDir(): File {
         return File(
             deployRootDir.parentFile ?: deployRootDir,
@@ -472,76 +388,156 @@ internal class DeploymentService(
     }
 
 
-    private fun getDeploymentBackupDir(
-        gameId: String,
-        scopeName: String,
-        rootTarget: Boolean
-    ): File {
-        val identity = if (rootTarget) {
-            getRootDeploymentTargetIdentity(gameId)
-        } else {
-            getDeploymentTargetIdentity(gameId)
-        }
-
-        val hash = hashManifestKey(identity.stableKey())
-
-        val baseDir = deploymentManifestFile.parentFile
-            ?: File(appFilesDir, "state")
-
-        return File(
-            baseDir,
-            "deployment_backups/${identity.gameId}_${identity.mode}_$hash/$scopeName"
-        )
-    }
-
-
-    private fun getEffectiveDeploymentManifestFile(gameId: String): File {
-        return File(
-            deploymentManifestFile.parentFile,
-            buildTargetScopedFileName("deployment_manifest", gameId)
-        )
-    }
-
-
-    private fun getEffectiveRootDeploymentManifestFile(gameId: String): File {
-        return File(
-            deploymentManifestFile.parentFile,
-            buildTargetScopedFileNameForIdentity(
-                prefix = "deployment_manifest_root",
-                identity = getRootDeploymentTargetIdentity(gameId)
+    private fun resolveDeploymentTargets(gameId: String): ResolvedDeploymentTargets {
+        val config = getGameDeploymentConfig(gameId)
+        return ResolvedDeploymentTargets(
+            gameId = gameId,
+            configSnapshot = config,
+            data = resolveTarget(
+                gameId = gameId,
+                config = config,
+                targetType = GameTargetType.DATA,
+                fallbackDirectory = deployRootDir,
+                manifestPrefix = "deployment_manifest",
+                baselinePrefix = "data_baseline",
+                backupScope = "data"
+            ),
+            root = resolveTarget(
+                gameId = gameId,
+                config = config,
+                targetType = GameTargetType.GAME_ROOT,
+                fallbackDirectory = getSimulatedGameRootDir(),
+                manifestPrefix = "deployment_manifest_root",
+                baselinePrefix = null,
+                backupScope = "root"
             )
         )
     }
 
-    private fun getDeploymentTargetIdentity(gameId: String): DeploymentTargetIdentity {
-        val config = getGameDeploymentConfig(gameId)
 
-        val validation = config
-            ?.takeIf { it.realDeployEnabled && !it.dataPathReselectionRequired }
-            ?.let {
-                gameTargetValidator.validateTarget(
-                    gameId = gameId,
-                    targetType = GameTargetType.DATA,
-                    path = it.targetDataPath
-                )
-            }
+    private fun resolveTarget(
+        gameId: String,
+        config: GameDeploymentConfig?,
+        targetType: GameTargetType,
+        fallbackDirectory: File,
+        manifestPrefix: String,
+        baselinePrefix: String?,
+        backupScope: String
+    ): ResolvedDeploymentTarget {
+        val realDeployEnabled = config?.realDeployEnabled == true
+        val configuredPath = when (targetType) {
+            GameTargetType.DATA -> config?.targetDataPath.orEmpty()
+            GameTargetType.GAME_ROOT -> config?.targetRootPath.orEmpty()
+        }
+        val reselectionRequired = when (targetType) {
+            GameTargetType.DATA -> config?.dataPathReselectionRequired == true
+            GameTargetType.GAME_ROOT -> config?.rootPathReselectionRequired == true
+        }
 
-        return when {
-            validation?.canDeploy == true && validation.canonicalPath != null -> {
-                DeploymentTargetIdentity(
-                    gameId = gameId,
-                    mode = "real_path",
-                    target = validation.canonicalPath
-                )
-            }
+        val validation = if (realDeployEnabled && !reselectionRequired) {
+            gameTargetValidator.validateTarget(
+                gameId = gameId,
+                targetType = targetType,
+                path = configuredPath
+            )
+        } else {
+            null
+        }
 
-            else -> {
-                DeploymentTargetIdentity(
-                    gameId = gameId,
-                    mode = "simulated",
-                    target = deployRootDir.absolutePath
-                )
-            }
+        val validCanonicalPath = validation
+            ?.takeIf { it.canDeploy }
+            ?.canonicalPath
+        val simulatedDirectory = canonicalOrAbsolute(fallbackDirectory)
+        val realMode = when (targetType) {
+            GameTargetType.DATA -> "real_path"
+            GameTargetType.GAME_ROOT -> "root_real_path"
+        }
+        val unavailableMode = when (targetType) {
+            GameTargetType.DATA -> "real_path_unavailable"
+            GameTargetType.GAME_ROOT -> "root_real_path_unavailable"
+        }
+        val simulatedMode = when (targetType) {
+            GameTargetType.DATA -> "simulated"
+            GameTargetType.GAME_ROOT -> "root_simulated"
+        }
+
+        val identity = when {
+            !realDeployEnabled -> DeploymentTargetIdentity(
+                gameId = gameId,
+                mode = simulatedMode,
+                target = simulatedDirectory.absolutePath
+            )
+
+            validCanonicalPath != null -> DeploymentTargetIdentity(
+                gameId = gameId,
+                mode = realMode,
+                target = validCanonicalPath
+            )
+
+            else -> DeploymentTargetIdentity(
+                gameId = gameId,
+                mode = unavailableMode,
+                target = validation?.canonicalPath
+                    ?: configuredPath.trim().ifBlank { "<unselected>" }
+            )
+        }
+
+        val deployDirectory = when {
+            !realDeployEnabled -> simulatedDirectory
+            validCanonicalPath != null -> File(validCanonicalPath)
+            else -> null
+        }
+        val unavailableReason = when {
+            deployDirectory != null -> null
+            reselectionRequired -> "The target path must be reselected."
+            validation != null -> validation.findings
+                .firstOrNull { it.severity == GameTargetValidationSeverity.ERROR }
+                ?.let { "${it.title} ${it.details}".trim() }
+                ?: "The target failed validation."
+            else -> "No usable target path is selected."
+        }
+
+        val stateDir = deploymentManifestFile.parentFile ?: File(appFilesDir, "state")
+        val manifestFile = File(
+            stateDir,
+            buildTargetScopedFileNameForIdentity(manifestPrefix, identity)
+        )
+        val baselineFile = baselinePrefix?.let {
+            File(stateDir, buildTargetScopedFileNameForIdentity(it, identity))
+        }
+        val hash = hashManifestKey(identity.stableKey())
+        val backupDirectory = File(
+            stateDir,
+            "deployment_backups/${identity.gameId}_${identity.mode}_$hash/$backupScope"
+        )
+
+        return ResolvedDeploymentTarget(
+            targetType = targetType,
+            identity = identity,
+            deployDirectory = deployDirectory,
+            manifestFile = manifestFile,
+            backupDirectory = backupDirectory,
+            baselineFile = baselineFile,
+            validation = validation,
+            unavailableReason = unavailableReason
+        )
+    }
+
+
+    private fun canonicalOrAbsolute(file: File): File {
+        return runCatching { file.canonicalFile }
+            .getOrElse { file.absoluteFile }
+    }
+
+
+    private fun requireTargetSnapshotStillCurrent(targets: ResolvedDeploymentTargets) {
+        val current = resolveDeploymentTargets(targets.gameId)
+        check(
+            current.configSnapshot == targets.configSnapshot &&
+                    current.data.identity == targets.data.identity &&
+                    current.root.identity == targets.root.identity
+        ) {
+            "Deployment target identity changed while the operation was being prepared. No files were written."
         }
     }
 
@@ -556,19 +552,6 @@ internal class DeploymentService(
     }
 
 
-    private fun buildTargetScopedFileName(
-        prefix: String,
-        gameId: String,
-        extension: String = "json"
-    ): String {
-        return buildTargetScopedFileNameForIdentity(
-            prefix = prefix,
-            identity = getDeploymentTargetIdentity(gameId),
-            extension = extension
-        )
-    }
-
-
     private fun buildTargetScopedFileNameForIdentity(
         prefix: String,
         identity: DeploymentTargetIdentity,
@@ -579,89 +562,25 @@ internal class DeploymentService(
     }
 
 
-    private fun getRootDeploymentTargetIdentity(gameId: String): DeploymentTargetIdentity {
-        val config = getGameDeploymentConfig(gameId)
-
-        val validation = config
-            ?.takeIf { it.realDeployEnabled && !it.rootPathReselectionRequired }
-            ?.let {
-                gameTargetValidator.validateTarget(
-                    gameId = gameId,
-                    targetType = GameTargetType.GAME_ROOT,
-                    path = it.targetRootPath
-                )
-            }
-
-        return when {
-            validation?.canDeploy == true && validation.canonicalPath != null -> {
-                DeploymentTargetIdentity(
-                    gameId = gameId,
-                    mode = "root_real_path",
-                    target = validation.canonicalPath
-                )
-            }
-
-            else -> {
-                DeploymentTargetIdentity(
-                    gameId = gameId,
-                    mode = "root_simulated",
-                    target = getSimulatedGameRootDir().absolutePath
-                )
-            }
-        }
-    }
-
-
     fun getDeploymentTargetDebugSummary(gameId: String): String {
-        val config = getGameDeploymentConfig(gameId)
-        val identity = getDeploymentTargetIdentity(gameId)
-        val rootIdentity = getRootDeploymentTargetIdentity(gameId)
-        val manifestName = buildTargetScopedFileName("deployment_manifest", gameId)
-        val rootManifestName = buildTargetScopedFileNameForIdentity(
-            prefix = "deployment_manifest_root",
-            identity = rootIdentity
-        )
-        val baselineName = buildTargetScopedFileName("data_baseline", gameId)
-
-        val dataValidation = config
-            ?.takeIf { it.realDeployEnabled && !it.dataPathReselectionRequired }
-            ?.let {
-                gameTargetValidator.validateTarget(
-                    gameId = gameId,
-                    targetType = GameTargetType.DATA,
-                    path = it.targetDataPath
-                )
-            }
-        val rootValidation = config
-            ?.takeIf {
-                it.realDeployEnabled &&
-                        !it.rootPathReselectionRequired &&
-                        it.targetRootPath.isNotBlank()
-            }
-            ?.let {
-                gameTargetValidator.validateTarget(
-                    gameId = gameId,
-                    targetType = GameTargetType.GAME_ROOT,
-                    path = it.targetRootPath
-                )
-            }
+        val targets = resolveDeploymentTargets(gameId)
 
         return buildString {
-            appendLine("Deployment target identity:")
-            appendLine(identity.displaySummary())
-            appendLine("Root target identity:")
-            appendLine(rootIdentity.displaySummary())
-            appendLine("Manifest file: $manifestName")
-            appendLine("Baseline file: $baselineName")
-            appendLine("Root manifest file: $rootManifestName")
-            if (dataValidation != null) {
+            appendLine("Deployment Target Snapshot")
+            appendLine(targets.data.toDebugSummary())
+            appendLine(targets.root.toDebugSummary())
+
+            targets.data.validation?.let {
                 appendLine()
-                append(dataValidation.toDebugSummary())
+                append(it.toDebugSummary())
             }
-            if (rootValidation != null) {
+            targets.root.validation?.let {
                 appendLine()
-                append(rootValidation.toDebugSummary())
+                append(it.toDebugSummary())
             }
+
+            val dataValidation = targets.data.validation
+            val rootValidation = targets.root.validation
             if (dataValidation != null && rootValidation != null) {
                 val relationshipFindings = gameTargetValidator.validateRelationship(
                     dataResult = dataValidation,
@@ -683,28 +602,25 @@ internal class DeploymentService(
 
 
     fun buildDeploymentPreflightForGame(gameId: String): DeploymentPreflightResult {
-        val plan = buildDeploymentPlanForGame(gameId)
-        val config = getGameDeploymentConfig(gameId)
-
+        val targets = resolveDeploymentTargets(gameId)
         return deploymentPreflightChecker.check(
-            config = config,
-            plan = plan
+            config = targets.configSnapshot,
+            plan = buildDeploymentPlanForTargets(targets)
         )
     }
 
     fun requireDeploymentPreflightForGame(gameId: String): DeploymentPreflightResult {
-        val plan = buildDeploymentPlanForGame(gameId)
-        val config = getGameDeploymentConfig(gameId)
-
+        val targets = resolveDeploymentTargets(gameId)
         val result = deploymentPreflightChecker.check(
-            config = config,
-            plan = plan
+            config = targets.configSnapshot,
+            plan = buildDeploymentPlanForTargets(targets)
         )
 
         if (!result.canDeploy) {
             throw DeploymentPreflightException(result)
         }
 
+        requireTargetSnapshotStillCurrent(targets)
         return result
     }
 
@@ -738,14 +654,16 @@ internal class DeploymentService(
     private fun createStartedDeploymentJournal(
         gameId: String,
         plan: ScopedDeploymentPlan,
-        preflight: DeploymentPreflightResult
+        preflight: DeploymentPreflightResult,
+        targets: ResolvedDeploymentTargets
     ): DeploymentJournalRecord {
+        val startedAt = System.currentTimeMillis()
         return DeploymentJournalRecord(
-            operationId = "${System.currentTimeMillis()}_$gameId",
+            operationId = "${startedAt}_$gameId",
             gameId = gameId,
             profileId = getCurrentProfileIdForJournal(),
             status = DeploymentJournalStatus.STARTED,
-            startedAtEpochMillis = System.currentTimeMillis(),
+            startedAtEpochMillis = startedAt,
             completedAtEpochMillis = null,
             planSummary = DeploymentJournalPlanSummary(
                 dataOperationCount = plan.dataPlan.operationCount,
@@ -758,7 +676,23 @@ internal class DeploymentService(
                 preflightWarningCount = preflight.warningCount
             ),
             resultSummary = null,
-            failureMessage = null
+            failureMessage = null,
+            dataTarget = targets.data.toJournalTargetState(),
+            rootTarget = targets.root.toJournalTargetState()
+        )
+    }
+
+
+    private fun ResolvedDeploymentTarget.toJournalTargetState(): DeploymentJournalTargetState {
+        return DeploymentJournalTargetState(
+            targetType = targetType.name,
+            gameId = identity.gameId,
+            mode = identity.mode,
+            target = identity.target,
+            identityKey = identity.stableKey(),
+            manifestFilePath = manifestFile.absolutePath,
+            baselineFilePath = baselineFile?.absolutePath,
+            backupDirectoryPath = backupDirectory.absolutePath
         )
     }
 
@@ -767,13 +701,11 @@ internal class DeploymentService(
         val repository = DeploymentJournalRepository(
             getDeploymentJournalFile(gameId)
         )
-
         val record = repository.load() ?: return null
 
         if (record.status != DeploymentJournalStatus.STARTED) {
             return null
         }
-
 
         return buildString {
             appendLine("Previous deploy may not have finished cleanly.")
@@ -782,13 +714,21 @@ internal class DeploymentService(
             appendLine("Operation ID: ${record.operationId}")
             appendLine("Status: ${record.status}")
             appendLine("Started: ${record.startedAtEpochMillis}")
+            record.dataTarget?.let {
+                appendLine("Data target identity: ${it.identityKey}")
+                appendLine("Data manifest: ${it.manifestFilePath}")
+                appendLine("Data baseline: ${it.baselineFilePath ?: "not recorded"}")
+            } ?: appendLine("Data target identity: not recorded by this legacy journal")
+            record.rootTarget?.let {
+                appendLine("Game Root target identity: ${it.identityKey}")
+                appendLine("Game Root manifest: ${it.manifestFilePath}")
+            } ?: appendLine("Game Root target identity: not recorded by this legacy journal")
             appendLine("Data operations planned: ${record.planSummary.dataOperationCount}")
             appendLine("Game Root operations planned: ${record.planSummary.rootOperationCount}")
             appendLine("Preflight errors: ${record.planSummary.preflightErrorCount}")
             appendLine("Preflight warnings: ${record.planSummary.preflightWarningCount}")
-            appendLine("This build will only warn. Recovery actions will be added later.")
+            appendLine("Review this warning before starting another deployment.")
         }
-
     }
 
 
@@ -809,47 +749,39 @@ internal class DeploymentService(
 
 
     fun buildFullRedeployPlanForGame(gameId: String): ScopedDeploymentPlan {
-        val dataManifestRepository = DeploymentManifestRepository(
-            getEffectiveDeploymentManifestFile(gameId)
-        )
+        return buildFullRedeployPlanForTargets(resolveDeploymentTargets(gameId))
+    }
 
-        val oldDataManifest = dataManifestRepository.load()
+
+    private fun buildFullRedeployPlanForTargets(
+        targets: ResolvedDeploymentTargets
+    ): ScopedDeploymentPlan {
+        val oldDataManifest = loadManifestForPlan(targets.data)
         val dataWinningRecords = getCurrentDataWinningRecords()
-
-        val rootManifestRepository = DeploymentManifestRepository(
-            getEffectiveRootDeploymentManifestFile(gameId)
-        )
-
-        val oldRootManifest = rootManifestRepository.load()
+        val oldRootManifest = loadManifestForPlan(targets.root)
         val rootWinningRecords = getCurrentRootWinningRecords()
-
         val builder = DeploymentPlanBuilder()
 
-        val dataPlan = builder.buildFullRedeploy(
-            scope = DeploymentPlanScope.DATA,
-            oldManifest = oldDataManifest,
-            newWinningRecords = dataWinningRecords
-        )
-
-        val rootPlan = builder.buildFullRedeploy(
-            scope = DeploymentPlanScope.GAME_ROOT,
-            oldManifest = oldRootManifest,
-            newWinningRecords = rootWinningRecords
-        )
-
         return ScopedDeploymentPlan(
-            dataPlan = dataPlan,
-            rootPlan = rootPlan
+            dataPlan = builder.buildFullRedeploy(
+                scope = DeploymentPlanScope.DATA,
+                oldManifest = oldDataManifest,
+                newWinningRecords = dataWinningRecords
+            ),
+            rootPlan = builder.buildFullRedeploy(
+                scope = DeploymentPlanScope.GAME_ROOT,
+                oldManifest = oldRootManifest,
+                newWinningRecords = rootWinningRecords
+            )
         )
     }
 
 
     fun buildFullRedeployPlanDebugSummary(gameId: String): String {
-        val plan = buildFullRedeployPlanForGame(gameId)
-        val config = getGameDeploymentConfig(gameId)
-
+        val targets = resolveDeploymentTargets(gameId)
+        val plan = buildFullRedeployPlanForTargets(targets)
         val preflight = deploymentPreflightChecker.check(
-            config = config,
+            config = targets.configSnapshot,
             plan = plan
         )
 
@@ -858,7 +790,10 @@ internal class DeploymentService(
             appendLine("This is a recovery planning check only.")
             appendLine("No files were changed.")
             appendLine()
-            appendLine(buildDeploymentPlanContextSummary(gameId, config, plan))
+            appendLine(buildDeploymentPlanContextSummary(gameId, targets.configSnapshot, plan))
+            appendLine()
+            appendLine(targets.data.toDebugSummary())
+            appendLine(targets.root.toDebugSummary())
             appendLine()
             appendLine(plan.toDebugSummary())
             appendLine()
@@ -886,15 +821,18 @@ internal class DeploymentService(
         }
     }
 
+    internal fun resolvedDataTarget(gameId: String): ResolvedDeploymentTarget =
+        resolveDeploymentTargets(gameId).data
+
     internal fun effectiveDataManifestFile(gameId: String): File =
-        getEffectiveDeploymentManifestFile(gameId)
+        resolvedDataTarget(gameId).manifestFile
 
     internal fun dataTargetIdentity(gameId: String): DeploymentTargetIdentity =
-        getDeploymentTargetIdentity(gameId)
+        resolvedDataTarget(gameId).identity
 
     internal fun rootTargetIdentity(gameId: String): DeploymentTargetIdentity =
-        getRootDeploymentTargetIdentity(gameId)
+        resolveDeploymentTargets(gameId).root.identity
 
     internal fun targetScopedFileName(prefix: String, gameId: String): String =
-        buildTargetScopedFileName(prefix, gameId)
+        buildTargetScopedFileNameForIdentity(prefix, dataTargetIdentity(gameId))
 }

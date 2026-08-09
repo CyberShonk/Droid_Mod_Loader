@@ -7,6 +7,19 @@ class DeploymentJournalRepository(
     private val journalFile: File
 ) {
     fun saveStarted(record: DeploymentJournalRecord) {
+        val existing = load()
+        check(existing?.status != DeploymentJournalStatus.STARTED) {
+            buildString {
+                append("Refusing to overwrite unfinished deployment journal")
+                existing?.let {
+                    append(" ${it.operationId}")
+                    it.dataTarget?.let { target ->
+                        append(" for ${target.mode}:${target.target}")
+                    }
+                }
+                append(". Review the previous deployment warning before starting another deploy.")
+            }
+        }
         save(record)
     }
 
@@ -79,7 +92,9 @@ class DeploymentJournalRepository(
                 )
             },
             failureMessage = json.optString("failureMessage")
-                .takeIf { it.isNotBlank() && it != "null" }
+                .takeIf { it.isNotBlank() && it != "null" },
+            dataTarget = json.optJSONObject("dataTarget")?.toTargetState(),
+            rootTarget = json.optJSONObject("rootTarget")?.toTargetState()
         )
     }
 
@@ -97,6 +112,8 @@ class DeploymentJournalRepository(
             put("status", record.status.name)
             put("startedAtEpochMillis", record.startedAtEpochMillis)
             put("completedAtEpochMillis", record.completedAtEpochMillis ?: JSONObject.NULL)
+            put("dataTarget", record.dataTarget?.toJson() ?: JSONObject.NULL)
+            put("rootTarget", record.rootTarget?.toJson() ?: JSONObject.NULL)
 
             put(
                 "planSummary",
@@ -134,6 +151,33 @@ class DeploymentJournalRepository(
         }
     }
 
+    private fun DeploymentJournalTargetState.toJson(): JSONObject {
+        return JSONObject().apply {
+            put("targetType", targetType)
+            put("gameId", gameId)
+            put("mode", mode)
+            put("target", target)
+            put("identityKey", identityKey)
+            put("manifestFilePath", manifestFilePath)
+            put("baselineFilePath", baselineFilePath ?: JSONObject.NULL)
+            put("backupDirectoryPath", backupDirectoryPath)
+        }
+    }
+
+    private fun JSONObject.toTargetState(): DeploymentJournalTargetState {
+        return DeploymentJournalTargetState(
+            targetType = optString("targetType"),
+            gameId = optString("gameId"),
+            mode = optString("mode"),
+            target = optString("target"),
+            identityKey = optString("identityKey"),
+            manifestFilePath = optString("manifestFilePath"),
+            baselineFilePath = optString("baselineFilePath")
+                .takeIf { it.isNotBlank() && it != "null" },
+            backupDirectoryPath = optString("backupDirectoryPath")
+        )
+    }
+
     private fun JSONObject.optNullableLong(name: String): Long? {
         if (!has(name) || isNull(name)) return null
         return optLong(name)
@@ -148,5 +192,4 @@ class DeploymentJournalRepository(
             )
         )
     }
-
 }

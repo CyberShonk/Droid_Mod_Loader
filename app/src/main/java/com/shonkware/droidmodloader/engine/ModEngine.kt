@@ -66,17 +66,12 @@ class ModEngine(
     )
     private val modInspectionService = ModInspectionService(
         modFileIndexDir = File(stateFile.parentFile, "mod_file_indexes"),
-        deploymentManifestFile = deploymentManifestFile,
-        deployRootDir = deployRootDir,
         currentMods = modLibraryService::getCurrentMods,
         indexContent = modLibraryService::indexModContent,
         installedRecords = modLibraryService::loadInstalledModRecords,
         dataWinningRecords = modLibraryService::getCurrentDataWinningRecords,
         rootWinningRecords = modLibraryService::getCurrentRootWinningRecords,
-        deploymentConfig = deploymentService::getGameDeploymentConfig,
-        isValidTargetPath = deploymentService::validateTargetDataPath,
-        effectiveManifestFile = deploymentService::effectiveDataManifestFile,
-        targetScopedFileName = deploymentService::targetScopedFileName
+        resolvedDataTarget = deploymentService::resolvedDataTarget
     )
     private val downloadedArchiveService = DownloadedArchiveService(
         archiveLibraryDir = archiveLibraryDir,
