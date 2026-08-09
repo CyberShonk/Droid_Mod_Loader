@@ -1,38 +1,15 @@
 ---
-name: Documentation task
-about: Update project, user, or release documentation
-title: "Docs: "
+name: Documentation issue
+about: Report incorrect, missing, or unclear public documentation
+title: "[Docs] "
 labels: documentation
 assignees: ""
 ---
 
-## Document
+## Document or page
 
-Which file needs to change?
+## What is incorrect or unclear
 
-Example:
+## What the current app actually does
 
-- `README.md`
-- `docs/requirements.md`
-- `docs/testing.md`
-
-## Problem
-
-What is missing, outdated, or unclear?
-
-## Desired Change
-
-What should the document say or explain?
-
-## Related Requirements
-
-Example:
-
-- REQ-RELEASE-002
-
-## Done When
-
-- [ ] Document updated
-- [ ] Links checked
-- [ ] Markdown renders correctly
-- [ ] Commit pushed
+Provide a reproducible example or source reference when possible.

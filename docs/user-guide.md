@@ -1,184 +1,115 @@
 # Droid Mod Loader User Guide
 
-This guide explains how to use Droid Mod Loader.
+Droid Mod Loader manages mod archives, installed mods, profiles, plugin state,
+and physical deployment for supported Bethesda games on Android.
 
-Droid Mod Loader is an Android Bethesda mod manager for shared-storage and GameNative setups.
+## Before you begin
 
-The app is not just a file copier. It is meant to manage installed mods, plugin state, deployment, diagnostics, and recovery.
+DML requires Android 11 or newer for its shared storage workflow. Grant **Allow
+access to manage all files** when Android prompts for DML's special storage
+access.
 
-## Basic Use Path
+Back up any game folder you plan to use for testing. DML is beta software and
+physical deployment changes files in the selected game target.
 
-The normal user path is:
+## 1. Create or select a profile
 
-1. Select a game target.
-2. Import mods.
-3. Enable or disable mods.
-4. Manage plugin state.
-5. Review warnings.
-6. Deploy.
-7. Use diagnostics if something looks wrong.
+Profiles keep mod, plugin, Archive Library, and deployment state separate. Select
+the profile for the game setup you intend to manage before importing or deploying
+mods.
 
-## 1. Grant Storage Access and Select a Game Target
+Supported early game profiles include Skyrim Legendary Edition, Fallout: New
+Vegas, Fallout 3, Oblivion, and Tale of Two Wastelands through Fallout: New
+Vegas.
 
-DML requires Android 11 (API 30) or newer and requires its all-files special
-access before it can browse or modify shared game and mod folders. When prompted, open the Android
-settings page for DML, enable **Allow access to manage all files**, then return
-to the app.
+## 2. Select game folders
 
-The game target is the folder Droid Mod Loader deploys files into.
+A physical setup uses a game `Data` folder and, where required, a Game Root.
+DML stores direct filesystem paths for the active profile.
 
-Depending on setup, this may be:
+Physical deployment preflight distinguishes Data and Game Root, checks a bounded
+set of game executable and master markers, rejects folders that are obviously too
+broad or use the wrong target role, and checks that the selected Data and Game
+Root belong to the same installation.
 
-- a `Data` folder
-- a game root folder
-- a shared GameNative folder
+Tale of Two Wastelands uses a Fallout: New Vegas target. A clean Fallout: New
+Vegas installation can be selected before TTW files are present.
 
-The app should warn if the selected target looks wrong.
+Do not select unrelated storage roots as deployment targets.
 
-Do not select random storage folders as deploy targets.
+## 3. Choose an Archive Library
 
-## 2. Install Mods
+Tap **Install Mod** to open the Archive Library. On first use, choose the folder
+where you keep downloaded mod archives.
 
-Tap **Install Mod** to open the Archive Library.
+The selected archive folder is remembered per profile. DML scans files directly
+from that folder and does not move or delete the original downloads when you
+switch folders.
 
-The first time, DML opens its direct folder browser and asks you to choose the
-folder where you keep downloaded mod archives. DML remembers its canonical path
-for the active profile and scans files directly
-inside it for:
+The Archive Library supports search, refresh, folder switching, and installed
+archive history for the active profile.
 
-- ZIP
-- 7Z
-- RAR where supported
+Archive format is identified from file content rather than filename extension.
+ZIP and supported 7z/RAR variants enter the normal installer flow. Unsupported or
+unrecognized variants are rejected before they are registered as an installable
+managed archive.
 
-Each profile can remember a different archive folder. Switching profiles loads
-that profile's folder without changing the folders saved for other profiles. DML
-only reads the selected folder. Choosing a different folder does not delete or move
-the original archives.
+## 4. Install and manage mods
 
-The Archive Library provides:
+Installed mods are kept in profile storage managed by DML rather than copied
+directly into the game during import.
 
-- search by archive or mod name
-- manual Refresh
-- a Folder button for choosing a different archive folder
-- Installed and Previously installed history for the active profile
-- installable archives first, with currently installed archives at the bottom
+Enabled mods participate in the resolved game view. Disabled mods remain
+installed but do not contribute files to deployment.
 
-When you install an archive, DML copies it into managed app storage and sends it
-through the normal archive analysis and installer flow. The original downloaded
-file remains in the selected folder.
+Priority determines the winner when multiple enabled mods provide the same
+normalized path.
 
-If a saved profile came from an older URI-based build, DML preserves the profile
-but requires you to select its Data, Game Root, or Archive Library folder again.
+## 5. Manage plugins
 
-## 3. Enable or Disable Mods
+DML discovers Bethesda plugin files such as `.esm`, `.esp`, and `.esl` where the
+selected game supports them.
 
-Enabled mods participate in deployment.
+Plugin activation and ordering are specific to each game:
 
-Disabled mods stay installed in Droid Mod Loader, but should not affect the resolved game view or future deployment plan.
+- Skyrim Legendary Edition writes enabled plugins to `plugins.txt` and preserves the complete selected order in `loadorder.txt`.
+- Oblivion, Fallout 3, Fallout: New Vegas, and TTW write enabled plugins to `plugins.txt` and apply the selected order through plugin modification timestamps.
 
-## 4. Manage Plugins
-
-Droid Mod Loader can discover Bethesda plugin files such as:
-
-- `.esm`
-- `.esp`
-- `.esl` where relevant
-
-Plugin activation and order are applied according to the active profile's game:
-
-- `plugins.txt` contains enabled plugins in the selected order.
-- Skyrim Legendary Edition also receives `loadorder.txt`, which keeps the
-  complete selected order. Disabled plugins may remain there so their saved
-  positions are not lost.
-- Oblivion, Fallout 3, and Fallout: New Vegas use plugin-file modification
-  timestamps for load order. DML applies the complete selected order to those
-  timestamps and does not present `loadorder.txt` as authoritative.
-
-Timestamp ordering requires the active profile to have a valid writable direct
-Data-folder path. DML preflights the complete plugin set before changing output
-or file timestamps.
-
-## 5. Review Warnings
-
-Warnings are important.
-
-Warnings may indicate:
-
-- wrong target folder
-- missing plugin files
-- missing masters
-- unsafe deployment paths
-- interrupted deployment
-- unmanaged files
-- profile mismatch
-- unsupported archive layout
-
-Do not ignore deployment or recovery warnings.
+Timestamp ordering requires a valid writable Data folder. DML preflights the
+complete plugin set before changing plugin output or timestamps.
 
 ## 6. Deploy
 
-Deployment means Droid Mod Loader physically writes files to the selected game target.
+Deployment physically writes the resolved managed mod view to the selected game
+target.
 
-Before deployment, the app should build a plan.
+DML builds a deployment plan before writing. The plan can contain additions,
+updates, removals of previously managed files, backups, and blocked operations.
 
-The plan may include:
+Physical deployment uses state for each target so deployment history for one
+selected folder is not treated as the state of a different folder.
 
-- files to add
-- files to update
-- files to skip
-- files to remove if previously managed
-- files needing backup
-- dangerous operations to block or warn about
+DML does not intentionally delete unrelated unmanaged files. Review warnings and
+planned removals before deployment.
 
-## 7. Diagnostics
+## 7. Recovery and diagnostics
 
-Use diagnostics when something looks wrong.
+DML records deployment journal state so interrupted work can be detected.
+Recovery tools and diagnostics are safety features intended for users. They are
+not tools reserved for developers.
 
-Diagnostics should help explain:
+Use diagnostics when the selected target, plugin state, archive support, or
+deployment result is unclear.
 
-- app version
-- active profile
-- selected target
-- mod count
-- plugin count
-- deployment state
-- recovery warnings
-- likely problems
+If DML reports an unfinished deployment, review that warning before starting
+another risky deployment operation.
 
-## 8. Recovery
+## Current limitations
 
-Recovery tools are for normal users, not just developers.
-
-Use recovery tools when:
-
-- deployment was interrupted
-- files did not deploy correctly
-- the app warns about unfinished deployment
-- the target state looks suspicious
-- a full redeploy is needed
-
-Dangerous recovery actions should explain what they do before running.
-
-## Safe Testing Advice
-
-When testing new Droid Mod Loader builds:
-
-1. Back up important game folders.
-2. Test deployment against a safe test folder first.
-3. Read warnings before deploying.
-4. Keep one clean profile for testing.
-5. Do not use important saves for first-time experiments.
-
-## Current Known Limitations
-
-This guide will change as the app changes.
-
-Known areas still being improved:
-
-- deployment recovery polish
-- conflict detail views
-- advanced installer handling
-- plugin intelligence
-- diagnostics export
-- beginner wording
-- general UI polish
+- DML remains beta software.
+- RAR5 is detected but is not currently supported for installation.
+- RAR archives protected by a password, encrypted RAR archives, and multipart RAR archives are not supported.
+- Some uncommon 7z compression or encryption variants may be unsupported.
+- Android can block access to another application's protected private storage.
+- Guidance for game folder selection and the target marker matrix for each distribution are still limited.
+- Returning to a previously used target does not automatically prove that every physical managed file is unchanged outside DML; use recovery tools when target state is uncertain.

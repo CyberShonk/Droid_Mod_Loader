@@ -1,60 +1,25 @@
-# Summary
+## Summary
 
-Describe what this change does.
+Describe the focused change.
 
-## Requirement IDs
+## Behavior visible to users
 
-- REQ-
+Describe what users will notice, or state that behavior is intentionally unchanged.
 
-## Type
+## Risk and safety
 
-- [ ] Bug fix
-- [ ] Feature
-- [ ] Refactor
-- [ ] Documentation
-- [ ] UI
-- [ ] Deployment safety
-- [ ] Release prep
+Describe affected storage, archive, profile, plugin, deployment, recovery, or Android lifecycle behavior.
 
-## Risk Level
+## Validation
 
-- [ ] Low
-- [ ] Medium
-- [ ] High
+- [ ] `git diff --check`
+- [ ] Focused tests, when applicable
+- [ ] `./gradlew testDebugUnitTest`
+- [ ] `./gradlew lintDebug`, when applicable
+- [ ] `./gradlew assembleDebug`, when applicable
+- [ ] Validation on a real device, when the change needs it
 
-High risk means this change touches deployment, deletion, backup, recovery, path handling, profile persistence, plugin output, or target identity.
+## Documentation
 
-## Files/Areas Changed
-
--
-
-## Test Steps
-
-1.
-2.
-3.
-
-## Results
-
-Describe what passed.
-
-## Docs Updated
-
-- [ ] README
-- [ ] Requirements
-- [ ] Architecture
-- [ ] Decision log
-- [ ] Testing docs
-- [ ] Release checklist
-- [ ] Changelog
-- [ ] Not needed
-
-## Checklist
-
-- [ ] Focused change
-- [ ] Builds locally if code/resources changed
-- [ ] Manual test steps completed
-- [ ] Dangerous file behavior tested with safe target if relevant
-- [ ] Changelog updated if user-facing
-- [ ] No release APKs committed
-- [ ] No accidental backup files committed
+- [ ] User documentation was updated when behavior or limitations changed
+- [ ] Changelog or release notes were updated when applicable

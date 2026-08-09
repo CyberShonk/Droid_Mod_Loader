@@ -134,7 +134,7 @@ printf '\nNext steps:\n'
 printf '1. Review version.properties.\n'
 printf '2. Complete %s.\n' "$OUTPUT"
 printf '3. Update releases/changelog.md.\n'
-printf '4. Update current-status and release documentation.\n'
+printf '4. Update README or user documentation only if released behavior or limitations changed.\n'
 printf '5. Run ./tools/check-project.sh.\n'
 printf '6. Commit the release-preparation changes.\n'
 printf '7. Build and test the signed release APK.\n'

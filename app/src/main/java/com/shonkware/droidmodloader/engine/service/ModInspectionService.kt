@@ -12,9 +12,9 @@ import com.shonkware.droidmodloader.engine.index.ModFileIndexService
 import com.shonkware.droidmodloader.engine.index.ModFilePreview
 import com.shonkware.droidmodloader.engine.index.ModFilePreviewEntry
 import com.shonkware.droidmodloader.engine.index.ModFilePreviewStatus
+import com.shonkware.droidmodloader.engine.deploy.ResolvedDeploymentTarget
 import com.shonkware.droidmodloader.engine.model.DeployScope
 import com.shonkware.droidmodloader.engine.model.FileRecord
-import com.shonkware.droidmodloader.engine.model.GameDeploymentConfig
 import com.shonkware.droidmodloader.engine.model.InstalledModRecord
 import com.shonkware.droidmodloader.engine.model.Mod
 import com.shonkware.droidmodloader.engine.overwrite.OverwriteEntry
@@ -28,17 +28,12 @@ import java.io.File
 
 internal class ModInspectionService(
     modFileIndexDir: File,
-    private val deploymentManifestFile: File,
-    private val deployRootDir: File,
     private val currentMods: () -> List<Mod>,
     private val indexContent: (Mod) -> ModContentIndex,
     private val installedRecords: (List<Mod>) -> Map<String, InstalledModRecord>,
     private val dataWinningRecords: () -> List<FileRecord>,
     private val rootWinningRecords: () -> List<FileRecord>,
-    private val deploymentConfig: (String) -> GameDeploymentConfig?,
-    private val isValidTargetPath: (String) -> Boolean,
-    private val effectiveManifestFile: (String) -> File,
-    private val targetScopedFileName: (String, String) -> String
+    private val resolvedDataTarget: (String) -> ResolvedDeploymentTarget
 ) {
     private val modFileIndexService = ModFileIndexService(
         ModFileIndexRepository(modFileIndexDir)
@@ -51,13 +46,8 @@ internal class ModInspectionService(
         installedRecords(mods)
     private fun getCurrentDataWinningRecords(): List<FileRecord> = dataWinningRecords()
     private fun getCurrentRootWinningRecords(): List<FileRecord> = rootWinningRecords()
-    private fun getGameDeploymentConfig(gameId: String): GameDeploymentConfig? =
-        deploymentConfig(gameId)
-    private fun validateTargetDataPath(path: String): Boolean = isValidTargetPath(path)
-    private fun getEffectiveDeploymentManifestFile(gameId: String): File =
-        effectiveManifestFile(gameId)
-    private fun buildTargetScopedFileName(prefix: String, gameId: String): String =
-        targetScopedFileName(prefix, gameId)
+    private fun getResolvedDataTarget(gameId: String): ResolvedDeploymentTarget =
+        resolvedDataTarget(gameId)
 
     fun buildCurrentResolvedDataGraph(): ResolvedDataGraph {
         val mods = getCurrentMods().sortedBy { it.priority }
@@ -147,7 +137,21 @@ internal class ModInspectionService(
     }
 
     fun scanOverwriteFiles(gameId: String): OverwriteScanResult {
-        val baselineRepository = getDataBaselineRepository(gameId)
+        val target = getResolvedDataTarget(gameId)
+        if (!target.canDeploy) {
+            return OverwriteScanResult(
+                baselineExists = false,
+                entries = emptyList(),
+                message = buildString {
+                    append("Data target is unavailable. Overwrite scanning did not read another target's state.")
+                    if (!target.unavailableReason.isNullOrBlank()) {
+                        append(" ${target.unavailableReason}")
+                    }
+                }
+            )
+        }
+
+        val baselineRepository = getDataBaselineRepository(target)
         val baseline = baselineRepository.load()
 
         if (baseline == null) {
@@ -158,14 +162,10 @@ internal class ModInspectionService(
             )
         }
 
-        val currentTargetFiles = scanTargetDataFiles(gameId)
+        val currentTargetFiles = scanTargetDataFiles(target)
         val baselineByPath = baseline.files.associateBy { it.normalizedPath }
-
-        val manifestRepository = DeploymentManifestRepository(
-            getEffectiveDeploymentManifestFile(gameId)
-        )
-
-        val deployedPaths = manifestRepository.load()
+        val deployedPaths = DeploymentManifestRepository(target.manifestFile)
+            .load()
             .map { it.normalizedPath }
             .toSet()
 
@@ -211,6 +211,7 @@ internal class ModInspectionService(
             }
         )
     }
+
 
     private fun buildFolderSummaries(
         entries: List<ModFilePreviewEntry>
@@ -349,38 +350,35 @@ internal class ModInspectionService(
         }
     }
 
-    private fun getDataBaselineFile(gameId: String): File {
-        return File(
-            deploymentManifestFile.parentFile,
-            buildTargetScopedFileName("data_baseline", gameId)
+    private fun getDataBaselineRepository(
+        target: ResolvedDeploymentTarget
+    ): DataBaselineRepository {
+        return DataBaselineRepository(
+            checkNotNull(target.baselineFile) {
+                "Resolved Data target does not provide a baseline file."
+            }
         )
-    }
-
-    private fun getDataBaselineRepository(gameId: String): DataBaselineRepository {
-        return DataBaselineRepository(getDataBaselineFile(gameId))
     }
 
     fun hasDataBaseline(gameId: String): Boolean {
-        return getDataBaselineRepository(gameId).exists()
+        val target = getResolvedDataTarget(gameId)
+        return target.canDeploy && getDataBaselineRepository(target).exists()
     }
 
     fun rebuildDataBaseline(gameId: String): DataBaselineSnapshot {
-        val targetFiles = scanTargetDataFiles(gameId)
-        val config = getGameDeploymentConfig(gameId)
-
-        val targetDescription = when {
-            config != null && config.realDeployEnabled && validateTargetDataPath(config.targetDataPath) ->
-                config.targetDataPath
-
-            else ->
-                deployRootDir.absolutePath
+        val target = getResolvedDataTarget(gameId)
+        check(target.canDeploy) {
+            buildString {
+                append("Data target is unavailable. Refusing to rebuild a baseline using another target's state.")
+                if (!target.unavailableReason.isNullOrBlank()) {
+                    append(" ${target.unavailableReason}")
+                }
+            }
         }
 
-        val manifestRepository = DeploymentManifestRepository(
-            getEffectiveDeploymentManifestFile(gameId)
-        )
-
-        val deployedPaths = manifestRepository.load()
+        val targetFiles = scanTargetDataFiles(target)
+        val deployedPaths = DeploymentManifestRepository(target.manifestFile)
+            .load()
             .map { it.normalizedPath }
             .toSet()
 
@@ -399,26 +397,20 @@ internal class ModInspectionService(
         val snapshot = DataBaselineSnapshot(
             gameId = gameId,
             createdAtEpochMillis = System.currentTimeMillis(),
-            targetDescription = targetDescription,
+            targetDescription = target.identity.target,
             files = baselineFiles
         )
 
-        getDataBaselineRepository(gameId).save(snapshot)
+        getDataBaselineRepository(target).save(snapshot)
         return snapshot
     }
 
-    private fun scanTargetDataFiles(gameId: String): List<TargetDataFileEntry> {
-        val config = getGameDeploymentConfig(gameId)
-
-        return when {
-            config != null && config.realDeployEnabled && validateTargetDataPath(config.targetDataPath) -> {
-                overwriteScanner.scanLocalDataFolder(File(config.targetDataPath))
-            }
-
-            else -> {
-                overwriteScanner.scanLocalDataFolder(deployRootDir)
-            }
-        }
+    private fun scanTargetDataFiles(
+        target: ResolvedDeploymentTarget
+    ): List<TargetDataFileEntry> {
+        return overwriteScanner.scanLocalDataFolder(
+            target.requireDeployDirectory()
+        )
     }
 
     private fun hasBaselineFileChanged(

@@ -1,50 +1,35 @@
 ---
 name: Bug report
-about: Report broken behavior in Droid Mod Loader
-title: "Bug: "
+about: Report a reproducible Droid Mod Loader problem
+title: "[Bug] "
 labels: bug
 assignees: ""
 ---
 
-## Problem
+## DML version
 
-Describe what is broken.
+## Device and Android version
 
-## Expected Behavior
+## Game and compatibility environment
 
-Describe what should have happened.
+## What happened
 
-## Actual Behavior
+## What you expected
 
-Describe what actually happened.
-
-## Steps to Reproduce
+## Steps to reproduce
 
 1.
 2.
 3.
 
-## Screenshots or Logs
+## Relevant setup
 
-Paste screenshots, diagnostics, or logs here.
+- Active profile:
+- Data/Game Root target type:
+- Archive format, if relevant:
+- Mod/plugin involved, if relevant:
 
-## Device / Environment
+## Diagnostics or logs
 
-- Device:
-- Android version:
-- DML version:
-- Game:
-- GameNative/shared storage setup:
-
-## Related Requirements
-
-Example:
-
-- REQ-DIAG-001
-
-## Done When
-
-- [ ] Bug is reproduced or understood
-- [ ] Fix is implemented
-- [ ] Manual test steps pass
-- [ ] Docs/changelog updated if needed
+Attach screenshots, DML diagnostics, or logs that help reproduce the problem.
+Remove credentials, private paths, account data, and other sensitive information.

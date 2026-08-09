@@ -7,8 +7,33 @@ enum class DeploymentJournalStatus {
     REVIEWED
 }
 
+data class DeploymentJournalTargetState(
+    val targetType: String,
+    val gameId: String,
+    val mode: String,
+    val target: String,
+    val identityKey: String,
+    val manifestFilePath: String,
+    val baselineFilePath: String?,
+    val backupDirectoryPath: String
+) {
+    fun toDebugSummary(label: String): String {
+        return buildString {
+            appendLine("$label:")
+            appendLine("  Target type: $targetType")
+            appendLine("  Game: $gameId")
+            appendLine("  Mode: $mode")
+            appendLine("  Target: $target")
+            appendLine("  Identity key: $identityKey")
+            appendLine("  Manifest: $manifestFilePath")
+            appendLine("  Baseline: ${baselineFilePath ?: "not applicable"}")
+            appendLine("  Backups: $backupDirectoryPath")
+        }
+    }
+}
+
 data class DeploymentJournalRecord(
-    val schemaVersion: Int = 1,
+    val schemaVersion: Int = 2,
     val operationId: String,
     val gameId: String,
     val profileId: String,
@@ -17,17 +42,30 @@ data class DeploymentJournalRecord(
     val completedAtEpochMillis: Long?,
     val planSummary: DeploymentJournalPlanSummary,
     val resultSummary: DeploymentJournalResultSummary?,
-    val failureMessage: String?
+    val failureMessage: String?,
+    val dataTarget: DeploymentJournalTargetState? = null,
+    val rootTarget: DeploymentJournalTargetState? = null
 ) {
     fun toDebugSummary(): String {
         return buildString {
             appendLine("Deploy Journal")
+            appendLine("  Schema: $schemaVersion")
             appendLine("  Operation ID: $operationId")
             appendLine("  Game: $gameId")
             appendLine("  Profile: $profileId")
             appendLine("  Status: $status")
             appendLine("  Started: $startedAtEpochMillis")
             appendLine("  Completed: ${completedAtEpochMillis ?: "not completed"}")
+
+            if (dataTarget != null || rootTarget != null) {
+                appendLine()
+                dataTarget?.let { append(it.toDebugSummary("Data target")) }
+                rootTarget?.let { append(it.toDebugSummary("Game Root target")) }
+            } else {
+                appendLine()
+                appendLine("Target ownership:")
+                appendLine("  Not recorded by this legacy journal schema.")
+            }
 
             appendLine()
             appendLine("Plan:")
