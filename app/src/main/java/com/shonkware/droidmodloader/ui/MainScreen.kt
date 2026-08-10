@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.shonkware.droidmodloader.engine.flags.ModFlag
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.index.ModFilePreview
 import com.shonkware.droidmodloader.engine.install.PreparedArchiveInstall
@@ -62,6 +63,7 @@ data class DashboardUiState(
     val operationInProgress: Boolean,
     val activeOperationText: String,
     val modContentIndexes: Map<String, ModContentIndex>,
+    val modFlags: Map<String, Set<ModFlag>>,
     val pendingArchiveInstall: PreparedArchiveInstall?,
     val selectedInstallerOptionIds: Set<String>,
     val showInstallerDialog: Boolean,
@@ -228,6 +230,7 @@ private fun MainDashboardScreen(
                 ModsCard(
                     mods = state.mods,
                     modContentIndexes = state.modContentIndexes,
+                    modFlags = state.modFlags,
                     onToggleMod = actions.onToggleMod,
                     onMoveModUp = actions.onMoveModUp,
                     onMoveModDown = actions.onMoveModDown,
@@ -358,6 +361,7 @@ fun DroidModLoaderScreen(
             ModsPanelDialog(
                 mods = state.mods,
                 modContentIndexes = state.modContentIndexes,
+                modFlags = state.modFlags,
                 onToggleMod = actions.onToggleMod,
                 onMoveModUp = actions.onMoveModUp,
                 onMoveModDown = actions.onMoveModDown,

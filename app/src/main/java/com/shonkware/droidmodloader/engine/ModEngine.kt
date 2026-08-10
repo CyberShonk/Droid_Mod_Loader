@@ -6,6 +6,8 @@ import com.shonkware.droidmodloader.engine.deploy.ScopedDeploymentResult
 import com.shonkware.droidmodloader.engine.deploy.plan.DeploymentPreflightResult
 import com.shonkware.droidmodloader.engine.deploy.plan.ScopedDeploymentPlan
 import com.shonkware.droidmodloader.engine.download.DownloadedArchiveRecord
+import com.shonkware.droidmodloader.engine.flags.ModFlag
+import com.shonkware.droidmodloader.engine.flags.ModFlagEvaluator
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.index.ModFilePreview
 import com.shonkware.droidmodloader.engine.install.PreparedArchiveInstall
@@ -43,6 +45,7 @@ class ModEngine(
     private val downloadedArchiveListFile: File
 ) {
 
+    private val modFlagEvaluator = ModFlagEvaluator()
     private val modLibraryService = ModLibraryService(
         tempDir = tempDir,
         modsDir = modsDir,
@@ -179,6 +182,8 @@ class ModEngine(
 
     fun normalizeModPriorities(mods: List<Mod>): List<Mod> = modLibraryService.normalizeModPriorities(mods)
     fun indexModContent(mod: Mod): ModContentIndex = modLibraryService.indexModContent(mod)
+    fun evaluateModFlags(mod: Mod, contentIndex: ModContentIndex): Set<ModFlag> =
+        modFlagEvaluator.evaluate(mod, contentIndex)
     fun indexCurrentModContent(): Map<String, ModContentIndex> = modLibraryService.indexCurrentModContent()
     fun prepareArchiveInstall(
         archive: File,

@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.shonkware.droidmodloader.engine.flags.ModFlag
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.model.Mod
 import com.shonkware.droidmodloader.engine.model.PluginEntry
@@ -36,6 +37,7 @@ import com.shonkware.droidmodloader.engine.model.PluginEntry
 fun ModsPanelDialog(
     mods: List<Mod>,
     modContentIndexes: Map<String, ModContentIndex>,
+    modFlags: Map<String, Set<ModFlag>>,
     onToggleMod: (String) -> Unit,
     onMoveModUp: (String) -> Unit,
     onMoveModDown: (String) -> Unit,
@@ -138,6 +140,7 @@ fun ModsPanelDialog(
                                 CompactModRow(
                                     mod = mod,
                                     contentIndex = modContentIndexes[mod.id],
+                                    flags = modFlags[mod.id].orEmpty(),
                                     onToggleMod = onToggleMod,
                                     onMoveModUp = onMoveModUp,
                                     onMoveModDown = onMoveModDown,

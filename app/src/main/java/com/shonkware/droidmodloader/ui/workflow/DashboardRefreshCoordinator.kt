@@ -15,6 +15,7 @@ internal class DashboardRefreshCoordinator(
             state.visibleMods = result.mods
             state.visiblePlugins = result.plugins
             state.visibleModContentIndexes = result.modContentIndexes
+            state.visibleModFlags = result.modFlags
             state.summaryText = result.summaryText
             refreshSecondScreen()
         }

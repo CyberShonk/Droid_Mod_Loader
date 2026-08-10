@@ -396,6 +396,7 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     visibleMods = emptyList()
                     visiblePlugins = emptyList()
                     visibleModContentIndexes = emptyMap()
+                    visibleModFlags = emptyMap()
 
                     newProfileNameText = ""
                     newProfileDataPathText = DeploymentConfigUiMapper.NO_DATA_FOLDER_SELECTED
@@ -414,6 +415,7 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     visibleMods = emptyList()
                     visiblePlugins = emptyList()
                     visibleModContentIndexes = emptyMap()
+                    visibleModFlags = emptyMap()
                     archiveBrowserWorkflow.onProfileChanged()
                 }
             },
@@ -465,6 +467,7 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     visibleMods = emptyList()
                     visiblePlugins = emptyList()
                     visibleModContentIndexes = emptyMap()
+                    visibleModFlags = emptyMap()
                 }
             },
             saveSelectedGameConfigFromUi = { profileSessionCoordinator.saveSelectedGameConfigFromUi() },

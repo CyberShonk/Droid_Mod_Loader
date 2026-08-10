@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.shonkware.droidmodloader.engine.flags.ModFlag
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.model.Mod
 import com.shonkware.droidmodloader.ui.theme.DmlButtons
@@ -32,6 +33,7 @@ import com.shonkware.droidmodloader.ui.theme.DmlDefaults
 fun ModsCard(
     mods: List<Mod>,
     modContentIndexes: Map<String, ModContentIndex>,
+    modFlags: Map<String, Set<ModFlag>>,
     onToggleMod: (String) -> Unit,
     onMoveModUp: (String) -> Unit,
     onMoveModDown: (String) -> Unit,
@@ -75,6 +77,7 @@ fun ModsCard(
                     CompactModRow(
                         mod = mod,
                         contentIndex = modContentIndexes[mod.id],
+                        flags = modFlags[mod.id].orEmpty(),
                         onToggleMod = onToggleMod,
                         onMoveModUp = onMoveModUp,
                         onMoveModDown = onMoveModDown,
@@ -176,9 +179,32 @@ fun ModContentSummary(
     }
 }
 @Composable
+private fun ModFlagSummary(
+    flags: Set<ModFlag>
+) {
+    val labels = flags
+        .sortedBy { it.ordinal }
+        .map { flag ->
+            when (flag) {
+                ModFlag.MISSING_INSTALL_PATH -> "Missing folder"
+                ModFlag.NO_VALID_GAME_DATA -> "No valid game data"
+            }
+        }
+
+    if (labels.isNotEmpty()) {
+        Text(
+            text = "Flags: ${labels.joinToString(" | ")}",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
 fun CompactModRow(
     mod: Mod,
     contentIndex: ModContentIndex?,
+    flags: Set<ModFlag>,
     onToggleMod: (String) -> Unit,
     onMoveModUp: (String) -> Unit,
     onMoveModDown: (String) -> Unit,
@@ -238,16 +264,7 @@ fun CompactModRow(
                         }
                     }
 
-                    if (
-                        contentIndex != null &&
-                        contentIndex.deployableFiles.isEmpty() &&
-                        contentIndex.plugins.isEmpty()
-                    ) {
-                        Text(
-                            text = "Warning: no deployable game files detected",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
+                    ModFlagSummary(flags)
                 }
 
                 TextButton(onClick = { expanded = !expanded }) {

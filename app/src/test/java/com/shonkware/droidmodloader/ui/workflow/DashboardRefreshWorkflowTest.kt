@@ -1,5 +1,6 @@
 package com.shonkware.droidmodloader.ui.workflow
 
+import com.shonkware.droidmodloader.engine.flags.ModFlag
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.model.GameDeploymentConfig
 import com.shonkware.droidmodloader.engine.model.Mod
@@ -10,7 +11,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DashboardRefreshWorkflowTest {
-
     @Test
     fun `build sorts state and reports direct target`() {
         val low = mod("low", priority = 1, enabled = true)
@@ -25,18 +25,20 @@ class DashboardRefreshWorkflowTest {
                 realDeployEnabled = true
             )
         )
-
         val result = DashboardRefreshWorkflow().build(engine, "fallout_nv")
-
         assertEquals(listOf("low", "high"), result.mods.map { it.id })
         assertEquals(listOf("early.esm", "late.esp"), result.plugins.map { it.normalizedPath })
         assertEquals(setOf("low", "high"), result.modContentIndexes.keys)
+        assertEquals(setOf("low", "high"), result.modFlags.keys)
+        assertEquals(
+            setOf(ModFlag.NO_VALID_GAME_DATA),
+            result.modFlags.getValue("high")
+        )
         assertTrue(result.summaryText.contains("Installed mods: 2"))
         assertTrue(result.summaryText.contains("Enabled mods: 1"))
         assertTrue(result.summaryText.contains("Deploy mode: Direct Path"))
         assertTrue(result.summaryText.contains("Target: /games/fnv/Data"))
     }
-
     private fun mod(id: String, priority: Int, enabled: Boolean): Mod {
         return Mod(
             id = id,
@@ -47,7 +49,6 @@ class DashboardRefreshWorkflowTest {
             modType = ModType.LOOSE
         )
     }
-
     private fun plugin(path: String, priority: Int): PluginEntry {
         return PluginEntry(
             pluginName = path,
@@ -62,7 +63,6 @@ class DashboardRefreshWorkflowTest {
             filePresentInDataFolder = true
         )
     }
-
     private class FakeEngine(
         private val mods: List<Mod>,
         private val plugins: List<PluginEntry>,
@@ -78,5 +78,14 @@ class DashboardRefreshWorkflowTest {
             modName = mod.name,
             entries = emptyList()
         )
+
+        override fun evaluateModFlags(
+            mod: Mod,
+            contentIndex: ModContentIndex
+        ): Set<ModFlag> = if (mod.id == "high") {
+            setOf(ModFlag.NO_VALID_GAME_DATA)
+        } else {
+            emptySet()
+        }
     }
 }

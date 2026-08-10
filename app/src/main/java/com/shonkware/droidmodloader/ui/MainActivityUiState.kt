@@ -3,6 +3,7 @@ package com.shonkware.droidmodloader.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.shonkware.droidmodloader.engine.flags.ModFlag
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.index.ModFilePreview
 import com.shonkware.droidmodloader.engine.install.PreparedArchiveInstall
@@ -59,6 +60,7 @@ interface MainActivityUiState {
     var showInstallerDialog: Boolean
     var installerDialogFullscreen: Boolean
     var visibleModContentIndexes: Map<String, ModContentIndex>
+    var visibleModFlags: Map<String, Set<ModFlag>>
     var selectedModFilePreview: ModFilePreview?
     var showModFilePreviewDialog: Boolean
     var modFilePreviewFullscreen: Boolean
@@ -129,6 +131,7 @@ internal class MutableMainActivityUiState : MainActivityUiState {
     override var showInstallerDialog by mutableStateOf(false)
     override var installerDialogFullscreen by mutableStateOf(false)
     override var visibleModContentIndexes by mutableStateOf<Map<String, ModContentIndex>>(emptyMap())
+    override var visibleModFlags by mutableStateOf<Map<String, Set<ModFlag>>>(emptyMap())
     override var selectedModFilePreview by mutableStateOf<ModFilePreview?>(null)
     override var showModFilePreviewDialog by mutableStateOf(false)
     override var modFilePreviewFullscreen by mutableStateOf(false)
@@ -178,6 +181,7 @@ internal class MutableMainActivityUiState : MainActivityUiState {
             operationInProgress = operationInProgress,
             activeOperationText = activeOperationText,
             modContentIndexes = visibleModContentIndexes,
+            modFlags = visibleModFlags,
             pendingArchiveInstall = pendingArchiveInstall,
             selectedInstallerOptionIds = pendingInstallerSelectedOptionIds,
             showInstallerDialog = showInstallerDialog,

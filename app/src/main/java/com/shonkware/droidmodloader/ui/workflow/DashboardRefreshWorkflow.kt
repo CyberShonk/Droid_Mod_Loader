@@ -1,6 +1,7 @@
 package com.shonkware.droidmodloader.ui.workflow
 
 import com.shonkware.droidmodloader.engine.ModEngine
+import com.shonkware.droidmodloader.engine.flags.ModFlag
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.model.GameDeploymentConfig
 import com.shonkware.droidmodloader.engine.model.Mod
@@ -13,6 +14,7 @@ internal interface DashboardRefreshEngine {
     fun getGameDeploymentConfig(gameId: String): GameDeploymentConfig?
     fun validateTargetDataPath(path: String): Boolean
     fun indexModContent(mod: Mod): ModContentIndex
+    fun evaluateModFlags(mod: Mod, contentIndex: ModContentIndex): Set<ModFlag>
 }
 
 internal class DashboardRefreshEngineAdapter(
@@ -28,12 +30,15 @@ internal class DashboardRefreshEngineAdapter(
         engine.validateTargetDataPath(path)
 
     override fun indexModContent(mod: Mod): ModContentIndex = engine.indexModContent(mod)
+    override fun evaluateModFlags(mod: Mod, contentIndex: ModContentIndex): Set<ModFlag> =
+        engine.evaluateModFlags(mod, contentIndex)
 }
 
 internal data class DashboardRefreshResult(
     val mods: List<Mod>,
     val plugins: List<PluginEntry>,
     val modContentIndexes: Map<String, ModContentIndex>,
+    val modFlags: Map<String, Set<ModFlag>>,
     val summaryText: String
 )
 
@@ -75,11 +80,18 @@ internal class DashboardRefreshWorkflow {
         val contentIndexes = mods.associate { mod ->
             mod.id to engine.indexModContent(mod)
         }
+        val modFlags = mods.associate { mod ->
+            mod.id to engine.evaluateModFlags(
+                mod = mod,
+                contentIndex = contentIndexes.getValue(mod.id)
+            )
+        }
 
         return DashboardRefreshResult(
             mods = mods,
             plugins = plugins,
             modContentIndexes = contentIndexes,
+            modFlags = modFlags,
             summaryText = summary
         )
     }
