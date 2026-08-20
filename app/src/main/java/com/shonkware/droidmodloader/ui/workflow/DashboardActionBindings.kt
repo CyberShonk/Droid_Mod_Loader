@@ -71,20 +71,14 @@ internal class DashboardActionBindings(
                     pluginSyncWorkflowController.syncWithNewEngineThenRefresh()
                 }
             },
-            onRealDeployChanged = { enabled ->
-                state.realDeployEnabledState = enabled
-            },
             onPickTargetFolder = {
                 directFolderSelectionCoordinator.open(
                     if (state.setupComplete) {
-                        FolderPickMode.ActiveDataFolder
+                        FolderPickMode.ActiveGameFolder
                     } else {
-                        FolderPickMode.FirstSetupDataFolder
+                        FolderPickMode.FirstSetupGameFolder
                     }
                 )
-            },
-            onPickRootTargetFolder = {
-                directFolderSelectionCoordinator.open(FolderPickMode.ActiveGameRootFolder)
             },
             onSaveSettings = {
                 activityThreadRunner.runInBackground {
@@ -94,24 +88,32 @@ internal class DashboardActionBindings(
             onShareLogs = shareLogs,
             onProfileNameChanged = { state.profileNameText = it },
             onSetupGameChanged = { gameId ->
+                if (state.setupGameId != gameId) {
+                    state.setupRootTargetPathText = ""
+                    state.setupTargetPathText = ""
+                    state.setupRealDeployEnabled = false
+                }
                 state.setupGameId = gameId
                 state.setupGameDisplayName = GameCatalog.displayName(gameId)
             },
             onSetupTargetPathChanged = { state.setupTargetPathText = it },
-            onSetupRealDeployChanged = { state.setupRealDeployEnabled = it },
             onCompleteSetup = profileWorkflowController::completeSetup,
             onSelectProfile = profileWorkflowController::switchProfile,
             onNewProfileNameChanged = { state.newProfileNameText = it },
             onNewProfileGameChanged = { gameId ->
+                if (state.newProfileGameId != gameId) {
+                    state.newProfileRootPathText = "No root folder selected"
+                    state.newProfileDataPathText = DeploymentConfigUiMapper.NO_DATA_FOLDER_SELECTED
+                    state.newProfileRealDeployEnabled = false
+                }
                 state.newProfileGameId = gameId
                 state.newProfileGameDisplayName = GameCatalog.displayName(gameId)
             },
-            onNewProfileRealDeployChanged = { state.newProfileRealDeployEnabled = it },
             onCreateAdditionalProfile = profileWorkflowController::createProfile,
             onOpenProfileDialog = { state.showProfileDialog = true },
             onCloseProfileDialog = { state.showProfileDialog = false },
             onPickNewProfileTargetFolder = {
-                directFolderSelectionCoordinator.open(FolderPickMode.NewProfileDataFolder)
+                directFolderSelectionCoordinator.open(FolderPickMode.NewProfileGameFolder)
             },
             onDeleteProfile = profileWorkflowController::deleteProfile,
             onToggleInstallerOption = installerWorkflowController::toggleOption,

@@ -130,7 +130,7 @@ fun StatusCard(
 
             if (!rootTargetReady) {
                 Text(
-                    text = "Pick Game Root if you use SKSE, NVSE, ENB, DLL loaders, or root EXE files.",
+                    text = "Choose a valid Game Folder to resolve the Game Root and Data targets.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -157,8 +157,8 @@ fun QuickStartCard() {
         ) {
             Text("Quick Start", fontWeight = FontWeight.Bold)
 
-            Text("1. Pick the game Data folder.")
-            Text("2. Pick Game Root too if the mod uses SKSE, NVSE, ENB, DLLs, or root EXE files.")
+            Text("1. Choose the installed game's main folder.")
+            Text("2. DML validates Game Root and detects Data automatically.")
             Text("3. Install a mod archive.")
             Text("4. Check the mod list and plugin list.")
             Text("5. Deploy.")

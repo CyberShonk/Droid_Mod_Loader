@@ -258,7 +258,7 @@ fun CompactModRow(
 
                         if (contentIndex.hasGameRootFiles) {
                             Text(
-                                text = "Contains Game Root files. Pick Game Root Folder before deploying SKSE/NVSE/ENB-style mods.",
+                                text = "Contains Game Root files. A validated Game Folder is required before deployment.",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }

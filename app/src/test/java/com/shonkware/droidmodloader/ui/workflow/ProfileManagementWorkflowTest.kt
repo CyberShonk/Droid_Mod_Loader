@@ -4,7 +4,6 @@ import com.shonkware.droidmodloader.engine.model.AppSetupState
 import com.shonkware.droidmodloader.engine.model.GameProfile
 import com.shonkware.droidmodloader.engine.profile.ProfileRepository
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -32,7 +31,8 @@ class ProfileManagementWorkflowTest {
                     profileNameText = "   ",
                     gameId = "skyrim_le",
                     targetDataPath = "/games/skyrim/Data",
-                    realDeployEnabled = true
+                    realDeployEnabled = true,
+                    targetRootPath = "/games/skyrim"
                 )
             },
             applyFirstSetupUiState = { _, profile ->
@@ -56,6 +56,7 @@ class ProfileManagementWorkflowTest {
         assertEquals("skyrim_le_1234", profiles.single().profileId)
         assertEquals("Default", profiles.single().profileName)
         assertEquals("/games/skyrim/Data", profiles.single().targetDataPath)
+        assertEquals("/games/skyrim", profiles.single().targetRootPath)
         assertTrue(profiles.single().realDeployEnabled)
         assertEquals(profiles.single(), appliedProfile)
         assertEquals(
@@ -71,7 +72,7 @@ class ProfileManagementWorkflowTest {
     }
 
     @Test
-    fun createAdditionalProfileUsesFallbackNameAndDirectPath() {
+    fun createAdditionalProfileUsesFallbackNameAndResolvedInstallation() {
         val repository = createRepository("additional-profile")
         var appliedProfile: GameProfile? = null
         val events = mutableListOf<String>()
@@ -84,7 +85,8 @@ class ProfileManagementWorkflowTest {
                     profileNameText = "",
                     gameId = "fallout_nv",
                     targetDataPath = "/games/falloutnv/Data",
-                    realDeployEnabled = false
+                    realDeployEnabled = true,
+                    targetRootPath = "/games/falloutnv"
                 )
             },
             applyCreatedProfileUiState = { _, profile ->
@@ -111,7 +113,8 @@ class ProfileManagementWorkflowTest {
         assertEquals("fallout_nv_2000", profile.profileId)
         assertEquals("Fallout New Vegas Profile", profile.profileName)
         assertEquals("/games/falloutnv/Data", profile.targetDataPath)
-        assertFalse(profile.realDeployEnabled)
+        assertEquals("/games/falloutnv", profile.targetRootPath)
+        assertTrue(profile.realDeployEnabled)
         assertEquals(profile, appliedProfile)
         assertEquals(
             "fallout_nv_2000",

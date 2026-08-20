@@ -89,6 +89,8 @@ data class DashboardUiState(
     val directFolderBrowserRequiresWritable: Boolean = false,
     val directFolderBrowserState: DirectFolderBrowserState = DirectFolderBrowserState(),
     val archiveImportInProgress: Boolean,
+    val setupRootTargetPathText: String = "",
+    val newProfileRootPathText: String = "No root folder selected",
 )
 
 data class DashboardActions(
@@ -109,22 +111,18 @@ data class DashboardActions(
     val onMovePluginUp: (String) -> Unit,
     val onMovePluginDown: (String) -> Unit,
     val onSelectGame: (String) -> Unit,
-    val onRealDeployChanged: (Boolean) -> Unit,
     val onPickTargetFolder: () -> Unit,
-    val onPickRootTargetFolder: () -> Unit,
     val onSaveSettings: () -> Unit,
     val onShareLogs: () -> Unit,
 
     val onProfileNameChanged: (String) -> Unit,
     val onSetupGameChanged: (String) -> Unit,
     val onSetupTargetPathChanged: (String) -> Unit,
-    val onSetupRealDeployChanged: (Boolean) -> Unit,
     val onCompleteSetup: () -> Unit,
 
     val onSelectProfile: (String) -> Unit,
     val onNewProfileNameChanged: (String) -> Unit,
     val onNewProfileGameChanged: (String) -> Unit,
-    val onNewProfileRealDeployChanged: (Boolean) -> Unit,
     val onCreateAdditionalProfile: () -> Unit,
 
     val onOpenProfileDialog: () -> Unit,
@@ -251,11 +249,8 @@ private fun MainDashboardScreen(
                 DeploymentSettingsCard(
                     selectedDataPathText = state.selectedDataPathText,
                     selectedRootPathText = state.selectedRootPathText,
-                    realDeployEnabled = state.realDeployEnabled,
                     secondScreenEnabled = state.secondScreenEnabled,
-                    onRealDeployChanged = actions.onRealDeployChanged,
                     onPickTargetFolder = actions.onPickTargetFolder,
-                    onPickRootTargetFolder = actions.onPickRootTargetFolder,
                     onSaveSettings = actions.onSaveSettings,
                     onToggleSecondScreen = actions.onToggleSecondScreen
                 )
@@ -434,13 +429,13 @@ fun DroidModLoaderScreen(
             newProfileNameText = state.newProfileNameText,
             newProfileGameId = state.newProfileGameId,
             newProfileDataPathText = state.newProfileDataPathText,
+            newProfileRootPathText = state.newProfileRootPathText,
             newProfileRealDeployEnabled = state.newProfileRealDeployEnabled,
             onSelectProfile = actions.onSelectProfile,
             onDeleteProfile = actions.onDeleteProfile,
             onNewProfileNameChanged = actions.onNewProfileNameChanged,
             onNewProfileGameChanged = actions.onNewProfileGameChanged,
             onPickNewProfileTargetFolder = actions.onPickNewProfileTargetFolder,
-            onNewProfileRealDeployChanged = actions.onNewProfileRealDeployChanged,
             onCreateAdditionalProfile = actions.onCreateAdditionalProfile,
             onClose = actions.onCloseProfileDialog,
             gameOptions = state.gameOptions

@@ -10,13 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -94,9 +92,13 @@ fun SetupScreen(
                         onSelectGame = actions.onSetupGameChanged
                     )
 
-                    Text("Target folder: ${state.selectedDataPathText}")
                     Text(
-                        text = "Pick the Data folder of your installed game.",
+                        "Game folder: " + state.setupRootTargetPathText.ifBlank {
+                            "No folder selected"
+                        }
+                    )
+                    Text(
+                        text = "Choose the installed game's main folder. DML validates it and detects the Data folder automatically.",
                         style = MaterialTheme.typography.bodySmall
                     )
 
@@ -104,22 +106,27 @@ fun SetupScreen(
                         onClick = actions.onPickTargetFolder,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Pick Target Folder")
+                        Text("Choose Game Folder")
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = state.setupRealDeployEnabled,
-                            onCheckedChange = actions.onSetupRealDeployChanged
-                        )
+                    Text(
+                        "Data folder: " + state.setupTargetPathText.ifBlank {
+                            "Not detected yet"
+                        }
+                    )
 
-                        Spacer(Modifier.width(8.dp))
-
-                        Text("Write to Real Target Folder")
-                    }
+                    Text(
+                        text = if (state.setupRealDeployEnabled) {
+                            "Game installation validated."
+                        } else {
+                            "Select a valid game folder to continue."
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
 
                     Button(
                         onClick = actions.onCompleteSetup,
+                        enabled = state.setupRealDeployEnabled,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Create Profile")
@@ -143,10 +150,10 @@ fun ProfileManagerDialog(
     onNewProfileNameChanged: (String) -> Unit,
     onNewProfileGameChanged: (String) -> Unit,
     onPickNewProfileTargetFolder: () -> Unit,
-    onNewProfileRealDeployChanged: (Boolean) -> Unit,
     onCreateAdditionalProfile: () -> Unit,
     onClose: () -> Unit,
-    gameOptions: List<String>
+    gameOptions: List<String>,
+    newProfileRootPathText: String = "No root folder selected"
 ) {
     AlertDialog(
         onDismissRequest = onClose,
@@ -208,9 +215,9 @@ fun ProfileManagerDialog(
                     onSelectGame = onNewProfileGameChanged
                 )
 
-                Text("Selected folder: $newProfileDataPathText")
+                Text("Game folder: $newProfileRootPathText")
                 Text(
-                    text = "Pick the Data folder of your installed game.",
+                    text = "Choose the installed game's main folder. DML validates it and detects the Data folder automatically.",
                     style = MaterialTheme.typography.bodySmall
                 )
 
@@ -218,22 +225,23 @@ fun ProfileManagerDialog(
                     onClick = onPickNewProfileTargetFolder,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Pick Target Folder")
+                    Text("Choose Game Folder")
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = newProfileRealDeployEnabled,
-                        onCheckedChange = onNewProfileRealDeployChanged
-                    )
+                Text("Data folder: $newProfileDataPathText")
 
-                    Spacer(Modifier.width(8.dp))
-
-                    Text("Write to Real Target Folder")
-                }
+                Text(
+                    text = if (newProfileRealDeployEnabled) {
+                        "Game installation validated."
+                    } else {
+                        "Select a valid game folder to continue."
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
 
                 Button(
                     onClick = onCreateAdditionalProfile,
+                    enabled = newProfileRealDeployEnabled,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Create Profile")

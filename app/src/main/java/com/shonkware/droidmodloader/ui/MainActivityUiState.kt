@@ -29,6 +29,7 @@ interface MainActivityUiState {
     var setupGameId: String
     var setupGameDisplayName: String
     var setupTargetPathText: String
+    var setupRootTargetPathText: String
     var setupRealDeployEnabled: Boolean
     var operationInProgress: Boolean
     var activeOperationText: String
@@ -36,6 +37,7 @@ interface MainActivityUiState {
     var newProfileGameId: String
     var newProfileGameDisplayName: String
     var newProfileDataPathText: String
+    var newProfileRootPathText: String
     var newProfileRealDeployEnabled: Boolean
     var developerTapCount: Int
     var developerModeEnabled: Boolean
@@ -100,6 +102,7 @@ internal class MutableMainActivityUiState : MainActivityUiState {
     override var setupGameId by mutableStateOf("skyrim_le")
     override var setupGameDisplayName by mutableStateOf("Skyrim Legendary Edition")
     override var setupTargetPathText by mutableStateOf("")
+    override var setupRootTargetPathText by mutableStateOf("")
     override var setupRealDeployEnabled by mutableStateOf(false)
     override var operationInProgress by mutableStateOf(false)
     override var activeOperationText by mutableStateOf("")
@@ -107,6 +110,7 @@ internal class MutableMainActivityUiState : MainActivityUiState {
     override var newProfileGameId by mutableStateOf("skyrim_le")
     override var newProfileGameDisplayName by mutableStateOf("Skyrim Legendary Edition")
     override var newProfileDataPathText by mutableStateOf("No folder selected")
+    override var newProfileRootPathText by mutableStateOf("No root folder selected")
     override var newProfileRealDeployEnabled by mutableStateOf(false)
     override var developerTapCount = 0
     override var developerModeEnabled by mutableStateOf(false)
@@ -169,12 +173,14 @@ internal class MutableMainActivityUiState : MainActivityUiState {
             profileNameText = profileNameText,
             setupGameId = setupGameId,
             setupTargetPathText = setupTargetPathText,
+            setupRootTargetPathText = setupRootTargetPathText,
             setupRealDeployEnabled = setupRealDeployEnabled,
             activeProfileName = activeProfileName,
             profileOptions = profileOptions,
             activeProfileId = activeProfileId,
             newProfileNameText = newProfileNameText,
             newProfileGameId = newProfileGameId,
+            newProfileRootPathText = newProfileRootPathText,
             newProfileRealDeployEnabled = newProfileRealDeployEnabled,
             showProfileDialog = showProfileDialog,
             newProfileDataPathText = newProfileDataPathText,

@@ -1,5 +1,6 @@
 package com.shonkware.droidmodloader.ui.workflow
 
+import com.shonkware.droidmodloader.engine.deploy.ResolvedGameInstallation
 import com.shonkware.droidmodloader.ui.MainActivityUiState
 
 internal class SelectedFolderConfigurationCoordinator(
@@ -11,6 +12,35 @@ internal class SelectedFolderConfigurationCoordinator(
     private val refreshDashboard: () -> Unit,
     private val appendLog: (String) -> Unit
 ) {
+    fun saveGameInstallation(installation: ResolvedGameInstallation) {
+        if (installation.gameId != state.selectedGameId) {
+            appendLog(
+                "Refused resolved game installation because the selected game changed " +
+                    "from ${installation.gameId} to ${state.selectedGameId}."
+            )
+            return
+        }
+
+        runOnUiThreadBlocking {
+            state.targetPathText = installation.dataPath
+            state.selectedDataPathText = installation.dataPath
+            state.rootTargetPathText = installation.gameRootPath
+            state.selectedRootPathText = installation.gameRootPath
+            state.dataPathReselectionRequired = false
+            state.rootPathReselectionRequired = false
+            state.realDeployEnabledState = true
+        }
+
+        saveSelectedGameConfig()
+        saveActiveProfile()
+        ensureDataBaselineIfMissing("game installation selected")
+        refreshDashboard()
+        appendLog(
+            "Saved resolved game installation for ${state.selectedGameId}: " +
+                "${installation.gameRootPath} (Data: ${installation.dataPath})"
+        )
+    }
+
     fun saveDataFolder(path: String) {
         runOnUiThreadBlocking {
             state.targetPathText = path

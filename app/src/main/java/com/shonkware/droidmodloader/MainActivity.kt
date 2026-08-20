@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.shonkware.droidmodloader.ui.theme.DmlTheme
 import com.shonkware.droidmodloader.engine.ModEngine
 import com.shonkware.droidmodloader.engine.model.Mod
+import com.shonkware.droidmodloader.engine.deploy.GameInstallationResolver
 import com.shonkware.droidmodloader.ui.MainActivityUiState
 import com.shonkware.droidmodloader.ui.MutableMainActivityUiState
 import com.shonkware.droidmodloader.ui.DirectFolderSelectionUiState
@@ -106,6 +107,7 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
         AllFilesAccessManager(applicationContext)
     }
     private val directPathValidator by lazy { DirectPathValidator() }
+    private val gameInstallationResolver by lazy { GameInstallationResolver() }
     private val directFolderBrowser by lazy {
         DirectFolderBrowser(
             roots = DirectStorageRootProvider(applicationContext).roots(),
@@ -119,6 +121,11 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
             pathValidator = directPathValidator,
             currentPathProvider = { mode ->
                 when (mode) {
+                    FolderPickMode.FirstSetupGameFolder -> setupRootTargetPathText
+                    FolderPickMode.ActiveGameFolder -> rootTargetPathText
+                    FolderPickMode.NewProfileGameFolder -> newProfileRootPathText
+                        .takeUnless { it == "No root folder selected" }
+                        .orEmpty()
                     FolderPickMode.FirstSetupDataFolder -> setupTargetPathText
                     FolderPickMode.ActiveDataFolder -> targetPathText
                     FolderPickMode.ActiveGameRootFolder -> rootTargetPathText
@@ -133,6 +140,18 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
             requestAllFilesAccess = { requestAllFilesAccess() },
             handlePickedFolder = { mode, path ->
                 folderPickerWorkflowController.handlePickedFolder(mode, path)
+            },
+            gameInstallationResolver = gameInstallationResolver,
+            selectedGameIdProvider = { mode ->
+                when (mode) {
+                    FolderPickMode.FirstSetupGameFolder -> setupGameId
+                    FolderPickMode.ActiveGameFolder -> selectedGameId
+                    FolderPickMode.NewProfileGameFolder -> newProfileGameId
+                    else -> null
+                }
+            },
+            handlePickedGameInstallation = { mode, installation ->
+                folderPickerWorkflowController.handlePickedGameInstallation(mode, installation)
             }
         )
     }
@@ -349,7 +368,8 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     profileNameText = profileNameText,
                     gameId = setupGameId,
                     targetDataPath = setupTargetPathText,
-                    realDeployEnabled = setupRealDeployEnabled
+                    realDeployEnabled = setupRealDeployEnabled,
+                    targetRootPath = setupRootTargetPathText
                 )
             },
             additionalProfileInputProvider = {
@@ -359,7 +379,10 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     targetDataPath = newProfileDataPathText
                         .takeUnless { it == DeploymentConfigUiMapper.NO_DATA_FOLDER_SELECTED }
                         .orEmpty(),
-                    realDeployEnabled = newProfileRealDeployEnabled
+                    realDeployEnabled = newProfileRealDeployEnabled,
+                    targetRootPath = newProfileRootPathText
+                        .takeUnless { it == "No root folder selected" }
+                        .orEmpty()
                 )
             },
             activeProfileIdProvider = { activeProfileId },
@@ -373,7 +396,7 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                 )
             },
             applyFirstSetupUiState = { profiles, profile ->
-                runOnUiThread {
+                activityThreadRunner.runOnUiThreadBlocking {
                     setupComplete = true
                     activeProfileId = profile.profileId
                     activeProfileName = profile.profileName
@@ -400,6 +423,7 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
 
                     newProfileNameText = ""
                     newProfileDataPathText = DeploymentConfigUiMapper.NO_DATA_FOLDER_SELECTED
+                    newProfileRootPathText = "No root folder selected"
                     newProfileRealDeployEnabled = false
                     showProfileDialog = false
                     archiveBrowserWorkflow.onProfileChanged()
@@ -551,7 +575,26 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
             saveArchiveLibraryPath = { path ->
                 archiveBrowserWorkflow.selectFolder(path)
             },
-            appendLog = { message -> operationReporter.appendLog(message) }
+            appendLog = { message -> operationReporter.appendLog(message) },
+            saveFirstSetupGameInstallation = { installation ->
+                runOnUiThread {
+                    if (setupGameId == installation.gameId) {
+                        setupRootTargetPathText = installation.gameRootPath
+                        setupTargetPathText = installation.dataPath
+                        setupRealDeployEnabled = true
+                    }
+                }
+            },
+            saveActiveGameInstallation = selectedFolderConfigurationCoordinator::saveGameInstallation,
+            setNewProfileGameInstallation = { installation ->
+                runOnUiThread {
+                    if (newProfileGameId == installation.gameId) {
+                        newProfileRootPathText = installation.gameRootPath
+                        newProfileDataPathText = installation.dataPath
+                        newProfileRealDeployEnabled = true
+                    }
+                }
+            }
         )
     }
     private val dashboardRefreshWorkflow = DashboardRefreshWorkflow()

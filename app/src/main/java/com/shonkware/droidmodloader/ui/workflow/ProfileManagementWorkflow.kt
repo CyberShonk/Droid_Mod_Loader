@@ -8,14 +8,16 @@ internal data class FirstSetupInput(
     val profileNameText: String,
     val gameId: String,
     val targetDataPath: String,
-    val realDeployEnabled: Boolean
+    val realDeployEnabled: Boolean,
+    val targetRootPath: String = ""
 )
 
 internal data class AdditionalProfileInput(
     val profileNameText: String,
     val gameId: String,
     val targetDataPath: String,
-    val realDeployEnabled: Boolean
+    val realDeployEnabled: Boolean,
+    val targetRootPath: String = ""
 )
 
 internal data class DashboardProfileInput(
@@ -54,6 +56,16 @@ internal class ProfileManagementWorkflow(
         val repo = repositoryProvider() ?: return
         val input = firstSetupInputProvider()
 
+        if (
+            !input.realDeployEnabled ||
+            input.targetRootPath.isBlank() ||
+            input.targetDataPath.isBlank()
+        ) {
+            appendError("Cannot complete setup: select a valid Game Folder first.")
+            updateLastOperationStatus("Setup requires a valid Game Folder.")
+            return
+        }
+
         val profileId = "${input.gameId}_${currentTimeMillis()}"
         val cleanProfileName = input.profileNameText.trim().ifBlank { "Default" }
 
@@ -64,7 +76,7 @@ internal class ProfileManagementWorkflow(
             gameDisplayName = gameDisplayNameProvider(input.gameId),
             targetDataPath = input.targetDataPath.trim(),
             realDeployEnabled = input.realDeployEnabled,
-            targetRootPath = "",
+            targetRootPath = input.targetRootPath.trim(),
             dataPathReselectionRequired = false,
             rootPathReselectionRequired = false,
             iniPresetId = null
@@ -93,6 +105,16 @@ internal class ProfileManagementWorkflow(
         val repo = repositoryProvider() ?: return
         val input = additionalProfileInputProvider()
 
+        if (
+            !input.realDeployEnabled ||
+            input.targetRootPath.isBlank() ||
+            input.targetDataPath.isBlank()
+        ) {
+            appendError("Cannot create profile: select a valid Game Folder first.")
+            updateLastOperationStatus("Profile creation requires a valid Game Folder.")
+            return
+        }
+
         val cleanProfileName = input.profileNameText.trim().ifBlank {
             "${gameDisplayNameProvider(input.gameId)} Profile"
         }
@@ -106,7 +128,7 @@ internal class ProfileManagementWorkflow(
             gameDisplayName = gameDisplayNameProvider(input.gameId),
             targetDataPath = input.targetDataPath.trim(),
             realDeployEnabled = input.realDeployEnabled,
-            targetRootPath = "",
+            targetRootPath = input.targetRootPath.trim(),
             dataPathReselectionRequired = false,
             rootPathReselectionRequired = false,
             iniPresetId = null

@@ -3,6 +3,9 @@ package com.shonkware.droidmodloader.ui.workflow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.shonkware.droidmodloader.engine.deploy.GameInstallationResolver
+import com.shonkware.droidmodloader.engine.deploy.GameTargetValidationSeverity
+import com.shonkware.droidmodloader.engine.deploy.ResolvedGameInstallation
 import com.shonkware.droidmodloader.engine.storage.DirectFolderBrowser
 import com.shonkware.droidmodloader.engine.storage.DirectFolderBrowserState
 import com.shonkware.droidmodloader.engine.storage.DirectPathValidator
@@ -13,7 +16,10 @@ internal class DirectFolderSelectionCoordinator(
     private val pathValidator: DirectPathValidator,
     private val currentPathProvider: (FolderPickMode) -> String,
     private val requestAllFilesAccess: () -> Unit,
-    private val handlePickedFolder: (FolderPickMode, String) -> Unit
+    private val handlePickedFolder: (FolderPickMode, String) -> Unit,
+    private val gameInstallationResolver: GameInstallationResolver? = null,
+    private val selectedGameIdProvider: (FolderPickMode) -> String? = { null },
+    private val handlePickedGameInstallation: (FolderPickMode, ResolvedGameInstallation) -> Unit = { _, _ -> }
 ) {
     var allFilesAccessGranted by mutableStateOf(true)
         private set
@@ -26,7 +32,7 @@ internal class DirectFolderSelectionCoordinator(
     var browserState by mutableStateOf(DirectFolderBrowserState())
         private set
 
-    private var folderPickMode = FolderPickMode.ActiveDataFolder
+    private var folderPickMode = FolderPickMode.ActiveGameFolder
 
     fun refreshAccessState() {
         allFilesAccessGranted = accessGrantedProvider()
@@ -61,6 +67,12 @@ internal class DirectFolderSelectionCoordinator(
 
     fun selectCurrent() {
         val currentPath = browserState.currentPath ?: return
+
+        if (folderPickMode.isGameInstallationMode()) {
+            selectCurrentGameInstallation(currentPath)
+            return
+        }
+
         val validation = pathValidator.validateDirectory(
             path = currentPath,
             requireWritable = browserRequiresWritable
@@ -78,8 +90,58 @@ internal class DirectFolderSelectionCoordinator(
         showBrowser = false
     }
 
+    private fun selectCurrentGameInstallation(path: String) {
+        val resolver = gameInstallationResolver
+        if (resolver == null) {
+            browserState = browserState.copy(
+                errorMessage = "Game installation validation is unavailable."
+            )
+            return
+        }
+
+        val gameId = selectedGameIdProvider(folderPickMode)?.trim().orEmpty()
+        if (gameId.isBlank()) {
+            browserState = browserState.copy(
+                errorMessage = "Select a supported game before choosing its folder."
+            )
+            return
+        }
+
+        val resolution = resolver.resolve(
+            gameId = gameId,
+            selectedGameRootPath = path
+        )
+        val installation = resolution.installation
+        if (!resolution.isResolved || installation == null) {
+            val finding = resolution.findings.firstOrNull {
+                it.severity == GameTargetValidationSeverity.ERROR
+            }
+            browserState = browserState.copy(
+                errorMessage = finding?.let {
+                    if (it.details.isBlank()) it.title else "${it.title}\n${it.details}"
+                } ?: "The selected game folder could not be validated."
+            )
+            return
+        }
+
+        showBrowser = false
+        handlePickedGameInstallation(folderPickMode, installation)
+    }
+
+    private fun FolderPickMode.isGameInstallationMode(): Boolean {
+        return when (this) {
+            FolderPickMode.FirstSetupGameFolder,
+            FolderPickMode.ActiveGameFolder,
+            FolderPickMode.NewProfileGameFolder -> true
+            else -> false
+        }
+    }
+
     private fun titleFor(mode: FolderPickMode): String {
         return when (mode) {
+            FolderPickMode.FirstSetupGameFolder,
+            FolderPickMode.ActiveGameFolder,
+            FolderPickMode.NewProfileGameFolder -> "Choose Game Folder"
             FolderPickMode.FirstSetupDataFolder,
             FolderPickMode.ActiveDataFolder,
             FolderPickMode.NewProfileDataFolder -> "Choose Data Folder"
