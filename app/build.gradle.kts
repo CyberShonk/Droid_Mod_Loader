@@ -51,6 +51,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            isDebuggable = true
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
