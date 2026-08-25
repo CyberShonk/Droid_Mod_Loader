@@ -124,14 +124,10 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     FolderPickMode.FirstSetupGameFolder -> setupRootTargetPathText
                     FolderPickMode.ActiveGameFolder -> rootTargetPathText
                     FolderPickMode.NewProfileGameFolder -> newProfileRootPathText
-                        .takeUnless { it == "No root folder selected" }
-                        .orEmpty()
                     FolderPickMode.FirstSetupDataFolder -> setupTargetPathText
                     FolderPickMode.ActiveDataFolder -> targetPathText
                     FolderPickMode.ActiveGameRootFolder -> rootTargetPathText
                     FolderPickMode.NewProfileDataFolder -> newProfileDataPathText
-                        .takeUnless { it == DeploymentConfigUiMapper.NO_DATA_FOLDER_SELECTED }
-                        .orEmpty()
                     FolderPickMode.ArchiveLibraryFolder -> activeProfileId
                         ?.let(archiveFolderPreferences::getSelectedFolderPath)
                         .orEmpty()
@@ -368,7 +364,10 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     profileNameText = profileNameText,
                     gameId = setupGameId,
                     targetDataPath = setupTargetPathText,
-                    realDeployEnabled = setupRealDeployEnabled,
+                    realDeployEnabled = DeploymentConfigUiMapper.isGameInstallationResolved(
+                        setupRootTargetPathText,
+                        setupTargetPathText
+                    ),
                     targetRootPath = setupRootTargetPathText
                 )
             },
@@ -376,13 +375,12 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                 AdditionalProfileInput(
                     profileNameText = newProfileNameText,
                     gameId = newProfileGameId,
-                    targetDataPath = newProfileDataPathText
-                        .takeUnless { it == DeploymentConfigUiMapper.NO_DATA_FOLDER_SELECTED }
-                        .orEmpty(),
-                    realDeployEnabled = newProfileRealDeployEnabled,
+                    targetDataPath = newProfileDataPathText,
+                    realDeployEnabled = DeploymentConfigUiMapper.isGameInstallationResolved(
+                        newProfileRootPathText,
+                        newProfileDataPathText
+                    ),
                     targetRootPath = newProfileRootPathText
-                        .takeUnless { it == "No root folder selected" }
-                        .orEmpty()
                 )
             },
             activeProfileIdProvider = { activeProfileId },
@@ -422,9 +420,8 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     visibleModFlags = emptyMap()
 
                     newProfileNameText = ""
-                    newProfileDataPathText = DeploymentConfigUiMapper.NO_DATA_FOLDER_SELECTED
-                    newProfileRootPathText = "No root folder selected"
-                    newProfileRealDeployEnabled = false
+                    newProfileDataPathText = ""
+                    newProfileRootPathText = ""
                     showProfileDialog = false
                     archiveBrowserWorkflow.onProfileChanged()
                 }
@@ -562,7 +559,6 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                 runOnUiThread {
                     setupTargetPathText = path
                     selectedDataPathText = path
-                    setupRealDeployEnabled = true
                 }
             },
             savePickedDataFolderToSelectedGameConfig = selectedFolderConfigurationCoordinator::saveDataFolder,
@@ -581,7 +577,6 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     if (setupGameId == installation.gameId) {
                         setupRootTargetPathText = installation.gameRootPath
                         setupTargetPathText = installation.dataPath
-                        setupRealDeployEnabled = true
                     }
                 }
             },
@@ -591,7 +586,6 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
                     if (newProfileGameId == installation.gameId) {
                         newProfileRootPathText = installation.gameRootPath
                         newProfileDataPathText = installation.dataPath
-                        newProfileRealDeployEnabled = true
                     }
                 }
             }

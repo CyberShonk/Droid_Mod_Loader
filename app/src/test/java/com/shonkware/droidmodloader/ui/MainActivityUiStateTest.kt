@@ -12,7 +12,7 @@ class MainActivityUiStateTest {
         val state = MutableMainActivityUiState().apply {
             activeProfileName = "Mojave"
             selectedGameId = "fallout_nv"
-            selectedDataPathText = "/storage/emulated/0/FNV/Data"
+            targetPathText = "/storage/emulated/0/FNV/Data"
             developerModeEnabled = true
             showArchiveFolderSetupDialog = true
         }

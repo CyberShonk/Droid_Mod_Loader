@@ -98,32 +98,20 @@ internal class ProfileSessionCoordinator(
         state.targetPathText = uiState.targetDataPath
         state.realDeployEnabledState = uiState.realDeployEnabled
         state.dataPathReselectionRequired = uiState.dataPathReselectionRequired
-        state.selectedDataPathText = DeploymentConfigUiMapper.dataPathDisplayText(
-            uiState.targetDataPath,
-            uiState.dataPathReselectionRequired
-        )
+        state.selectedDataPathText = uiState.targetDataPath
         state.rootTargetPathText = uiState.targetRootPath
         state.rootPathReselectionRequired = uiState.rootPathReselectionRequired
-        state.selectedRootPathText = DeploymentConfigUiMapper.rootPathDisplayText(
-            uiState.targetRootPath,
-            uiState.rootPathReselectionRequired
-        )
+        state.selectedRootPathText = uiState.targetRootPath
     }
 
     fun applyProfileConfigUiState(uiState: ProfileConfigUiState) {
         state.selectedGameId = uiState.selectedGameId
         state.targetPathText = uiState.targetDataPath
         state.dataPathReselectionRequired = uiState.dataPathReselectionRequired
-        state.selectedDataPathText = DeploymentConfigUiMapper.dataPathDisplayText(
-            uiState.targetDataPath,
-            uiState.dataPathReselectionRequired
-        )
+        state.selectedDataPathText = uiState.targetDataPath
         state.rootTargetPathText = uiState.targetRootPath
         state.rootPathReselectionRequired = uiState.rootPathReselectionRequired
-        state.selectedRootPathText = DeploymentConfigUiMapper.rootPathDisplayText(
-            uiState.targetRootPath,
-            uiState.rootPathReselectionRequired
-        )
+        state.selectedRootPathText = uiState.targetRootPath
         state.realDeployEnabledState = uiState.realDeployEnabled
     }
 

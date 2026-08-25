@@ -13,6 +13,7 @@ import com.shonkware.droidmodloader.engine.model.PluginEntry
 import com.shonkware.droidmodloader.engine.overwrite.OverwriteEntry
 import com.shonkware.droidmodloader.engine.storage.DirectFolderBrowserState
 import com.shonkware.droidmodloader.ui.archive.ArchiveBrowserUiState
+import com.shonkware.droidmodloader.ui.workflow.DeploymentConfigUiMapper
 import com.shonkware.droidmodloader.BuildConfig
 
 /**
@@ -30,7 +31,6 @@ interface MainActivityUiState {
     var setupGameDisplayName: String
     var setupTargetPathText: String
     var setupRootTargetPathText: String
-    var setupRealDeployEnabled: Boolean
     var operationInProgress: Boolean
     var activeOperationText: String
     var newProfileNameText: String
@@ -38,7 +38,6 @@ interface MainActivityUiState {
     var newProfileGameDisplayName: String
     var newProfileDataPathText: String
     var newProfileRootPathText: String
-    var newProfileRealDeployEnabled: Boolean
     var developerTapCount: Int
     var developerModeEnabled: Boolean
     var lastOperationStatus: String
@@ -103,15 +102,13 @@ internal class MutableMainActivityUiState : MainActivityUiState {
     override var setupGameDisplayName by mutableStateOf("Skyrim Legendary Edition")
     override var setupTargetPathText by mutableStateOf("")
     override var setupRootTargetPathText by mutableStateOf("")
-    override var setupRealDeployEnabled by mutableStateOf(false)
     override var operationInProgress by mutableStateOf(false)
     override var activeOperationText by mutableStateOf("")
     override var newProfileNameText by mutableStateOf("")
     override var newProfileGameId by mutableStateOf("skyrim_le")
     override var newProfileGameDisplayName by mutableStateOf("Skyrim Legendary Edition")
-    override var newProfileDataPathText by mutableStateOf("No folder selected")
-    override var newProfileRootPathText by mutableStateOf("No root folder selected")
-    override var newProfileRealDeployEnabled by mutableStateOf(false)
+    override var newProfileDataPathText by mutableStateOf("")
+    override var newProfileRootPathText by mutableStateOf("")
     override var developerTapCount = 0
     override var developerModeEnabled by mutableStateOf(false)
     override var lastOperationStatus by mutableStateOf("Ready.")
@@ -122,8 +119,8 @@ internal class MutableMainActivityUiState : MainActivityUiState {
     override var gameOptions by mutableStateOf(listOf("skyrim_le", "oblivion", "fallout_3", "fallout_nv", "ttw"))
     override var selectedGameId by mutableStateOf("skyrim_le")
     override var targetPathText by mutableStateOf("")
-    override var selectedDataPathText by mutableStateOf("No folder selected")
-    override var selectedRootPathText by mutableStateOf("No root folder selected")
+    override var selectedDataPathText by mutableStateOf("")
+    override var selectedRootPathText by mutableStateOf("")
     override var rootTargetPathText by mutableStateOf("")
     override var dataPathReselectionRequired by mutableStateOf(false)
     override var rootPathReselectionRequired by mutableStateOf(false)
@@ -165,23 +162,43 @@ internal class MutableMainActivityUiState : MainActivityUiState {
             plugins = visiblePlugins,
             gameOptions = gameOptions,
             selectedGameId = selectedGameId,
-            selectedDataPathText = selectedDataPathText,
-            selectedRootPathText = selectedRootPathText,
+            selectedDataPathText = DeploymentConfigUiMapper.dataPathDisplayText(
+                targetPathText,
+                dataPathReselectionRequired
+            ),
+            selectedRootPathText = DeploymentConfigUiMapper.rootPathDisplayText(
+                rootTargetPathText,
+                rootPathReselectionRequired
+            ),
             realDeployEnabled = realDeployEnabledState,
+            dataTargetReady = DeploymentConfigUiMapper.isTargetReady(
+                targetPathText,
+                dataPathReselectionRequired
+            ),
+            rootTargetReady = DeploymentConfigUiMapper.isTargetReady(
+                rootTargetPathText,
+                rootPathReselectionRequired
+            ),
             logText = logText,
             setupComplete = setupComplete,
             profileNameText = profileNameText,
             setupGameId = setupGameId,
             setupTargetPathText = setupTargetPathText,
             setupRootTargetPathText = setupRootTargetPathText,
-            setupRealDeployEnabled = setupRealDeployEnabled,
+            setupInstallationResolved = DeploymentConfigUiMapper.isGameInstallationResolved(
+                setupRootTargetPathText,
+                setupTargetPathText
+            ),
             activeProfileName = activeProfileName,
             profileOptions = profileOptions,
             activeProfileId = activeProfileId,
             newProfileNameText = newProfileNameText,
             newProfileGameId = newProfileGameId,
             newProfileRootPathText = newProfileRootPathText,
-            newProfileRealDeployEnabled = newProfileRealDeployEnabled,
+            newProfileInstallationResolved = DeploymentConfigUiMapper.isGameInstallationResolved(
+                newProfileRootPathText,
+                newProfileDataPathText
+            ),
             showProfileDialog = showProfileDialog,
             newProfileDataPathText = newProfileDataPathText,
             operationInProgress = operationInProgress,

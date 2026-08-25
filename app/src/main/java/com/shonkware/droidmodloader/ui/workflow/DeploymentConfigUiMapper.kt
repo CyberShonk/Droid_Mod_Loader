@@ -4,10 +4,10 @@ import com.shonkware.droidmodloader.engine.model.GameDeploymentConfig
 import com.shonkware.droidmodloader.engine.model.GameProfile
 
 internal object DeploymentConfigUiMapper {
-    const val NO_DATA_FOLDER_SELECTED = "No folder selected"
-    const val NO_ROOT_FOLDER_SELECTED = "No root folder selected"
-    const val DATA_FOLDER_RESELECTION_REQUIRED = "Reselect Data folder"
-    const val ROOT_FOLDER_RESELECTION_REQUIRED = "Reselect Game Root folder"
+    const val DATA_FOLDER_NOT_DETECTED = "Not detected yet"
+    const val GAME_FOLDER_NOT_SELECTED = "No folder selected"
+    const val DATA_FOLDER_WAITING_FOR_GAME_FOLDER = "Waiting for game folder"
+    const val GAME_FOLDER_RESELECTION_REQUIRED = "Needs to be selected again"
 
     fun emptyState(): DeploymentConfigUiState {
         return DeploymentConfigUiState(
@@ -80,8 +80,8 @@ internal object DeploymentConfigUiMapper {
     ): String {
         return when {
             path.isNotBlank() -> path
-            reselectionRequired -> DATA_FOLDER_RESELECTION_REQUIRED
-            else -> NO_DATA_FOLDER_SELECTED
+            reselectionRequired -> DATA_FOLDER_WAITING_FOR_GAME_FOLDER
+            else -> DATA_FOLDER_NOT_DETECTED
         }
     }
 
@@ -91,9 +91,23 @@ internal object DeploymentConfigUiMapper {
     ): String {
         return when {
             path.isNotBlank() -> path
-            reselectionRequired -> ROOT_FOLDER_RESELECTION_REQUIRED
-            else -> NO_ROOT_FOLDER_SELECTED
+            reselectionRequired -> GAME_FOLDER_RESELECTION_REQUIRED
+            else -> GAME_FOLDER_NOT_SELECTED
         }
+    }
+
+    fun isTargetReady(
+        path: String,
+        reselectionRequired: Boolean
+    ): Boolean {
+        return path.isNotBlank() && !reselectionRequired
+    }
+
+    fun isGameInstallationResolved(
+        gameRootPath: String,
+        dataPath: String
+    ): Boolean {
+        return gameRootPath.isNotBlank() && dataPath.isNotBlank()
     }
 }
 

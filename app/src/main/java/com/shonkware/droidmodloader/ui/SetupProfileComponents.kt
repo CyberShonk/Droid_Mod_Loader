@@ -116,7 +116,7 @@ fun SetupScreen(
                     )
 
                     Text(
-                        text = if (state.setupRealDeployEnabled) {
+                        text = if (state.setupInstallationResolved) {
                             "Game installation validated."
                         } else {
                             "Select a valid game folder to continue."
@@ -126,7 +126,7 @@ fun SetupScreen(
 
                     Button(
                         onClick = actions.onCompleteSetup,
-                        enabled = state.setupRealDeployEnabled,
+                        enabled = state.setupInstallationResolved,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Create Profile")
@@ -144,7 +144,7 @@ fun ProfileManagerDialog(
     newProfileNameText: String,
     newProfileGameId: String,
     newProfileDataPathText: String,
-    newProfileRealDeployEnabled: Boolean,
+    newProfileInstallationResolved: Boolean,
     onSelectProfile: (String) -> Unit,
     onDeleteProfile: (String) -> Unit,
     onNewProfileNameChanged: (String) -> Unit,
@@ -153,7 +153,7 @@ fun ProfileManagerDialog(
     onCreateAdditionalProfile: () -> Unit,
     onClose: () -> Unit,
     gameOptions: List<String>,
-    newProfileRootPathText: String = "No root folder selected"
+    newProfileRootPathText: String = ""
 ) {
     AlertDialog(
         onDismissRequest = onClose,
@@ -215,7 +215,11 @@ fun ProfileManagerDialog(
                     onSelectGame = onNewProfileGameChanged
                 )
 
-                Text("Game folder: $newProfileRootPathText")
+                Text(
+                    "Game folder: " + newProfileRootPathText.ifBlank {
+                        "No folder selected"
+                    }
+                )
                 Text(
                     text = "Choose the installed game's main folder. DML validates it and detects the Data folder automatically.",
                     style = MaterialTheme.typography.bodySmall
@@ -228,10 +232,14 @@ fun ProfileManagerDialog(
                     Text("Choose Game Folder")
                 }
 
-                Text("Data folder: $newProfileDataPathText")
+                Text(
+                    "Data folder: " + newProfileDataPathText.ifBlank {
+                        "Not detected yet"
+                    }
+                )
 
                 Text(
-                    text = if (newProfileRealDeployEnabled) {
+                    text = if (newProfileInstallationResolved) {
                         "Game installation validated."
                     } else {
                         "Select a valid game folder to continue."
@@ -241,7 +249,7 @@ fun ProfileManagerDialog(
 
                 Button(
                     onClick = onCreateAdditionalProfile,
-                    enabled = newProfileRealDeployEnabled,
+                    enabled = newProfileInstallationResolved,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Create Profile")

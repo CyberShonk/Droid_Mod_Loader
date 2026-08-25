@@ -91,7 +91,6 @@ internal class DashboardActionBindings(
                 if (state.setupGameId != gameId) {
                     state.setupRootTargetPathText = ""
                     state.setupTargetPathText = ""
-                    state.setupRealDeployEnabled = false
                 }
                 state.setupGameId = gameId
                 state.setupGameDisplayName = GameCatalog.displayName(gameId)
@@ -102,9 +101,8 @@ internal class DashboardActionBindings(
             onNewProfileNameChanged = { state.newProfileNameText = it },
             onNewProfileGameChanged = { gameId ->
                 if (state.newProfileGameId != gameId) {
-                    state.newProfileRootPathText = "No root folder selected"
-                    state.newProfileDataPathText = DeploymentConfigUiMapper.NO_DATA_FOLDER_SELECTED
-                    state.newProfileRealDeployEnabled = false
+                    state.newProfileRootPathText = ""
+                    state.newProfileDataPathText = ""
                 }
                 state.newProfileGameId = gameId
                 state.newProfileGameDisplayName = GameCatalog.displayName(gameId)

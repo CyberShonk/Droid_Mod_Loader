@@ -54,21 +54,13 @@ fun HeaderCard(
 fun StatusCard(
     activeProfileName: String,
     selectedGameId: String,
-    selectedDataPathText: String,
-    selectedRootPathText: String,
+    dataTargetReady: Boolean,
+    rootTargetReady: Boolean,
     realDeployEnabled: Boolean,
     lastOperationStatus: String,
     summaryText: String,
     onOpenProfileDialog: () -> Unit
 ) {
-    val dataTargetReady =
-        selectedDataPathText.isNotBlank() &&
-                selectedDataPathText != "No folder selected"
-
-    val rootTargetReady =
-        selectedRootPathText.isNotBlank() &&
-                selectedRootPathText != "No root folder selected"
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = DmlDefaults.panelCardColors(),
