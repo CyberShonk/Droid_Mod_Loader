@@ -10,7 +10,8 @@ internal class SelectedFolderConfigurationCoordinator(
     private val saveActiveProfile: () -> Unit,
     private val ensureDataBaselineIfMissing: (String) -> Unit,
     private val refreshDashboard: () -> Unit,
-    private val appendLog: (String) -> Unit
+    private val appendLog: (String) -> Unit,
+    private val onGameInstallationResolved: () -> Unit = {}
 ) {
     fun saveGameInstallation(installation: ResolvedGameInstallation) {
         if (installation.gameId != state.selectedGameId) {
@@ -33,6 +34,7 @@ internal class SelectedFolderConfigurationCoordinator(
 
         saveSelectedGameConfig()
         saveActiveProfile()
+        onGameInstallationResolved()
         ensureDataBaselineIfMissing("game installation selected")
         refreshDashboard()
         appendLog(

@@ -7,33 +7,66 @@ import org.junit.Test
 class DeployRecoveryWorkflowTest {
 
     @Test
-    fun `startup warning updates visible recovery state`() {
-        val warnings = mutableListOf<Pair<String, Boolean>>()
+    fun `startup warning exposes recovery attention without resolving journal`() {
+        val recoveryStates = mutableListOf<RecoveryState>()
         val statuses = mutableListOf<String>()
         val logs = mutableListOf<String>()
         val workflow = createWorkflow(
             engine = FakeEngine(warning = "unfinished deploy"),
-            warnings = warnings,
+            recoveryStates = recoveryStates,
             statuses = statuses,
             logs = logs
         )
 
         workflow.checkStartup(FakeEngine(warning = "unfinished deploy"))
 
-        assertEquals(listOf("unfinished deploy" to false), warnings)
+        assertEquals(
+            listOf(
+                RecoveryState(
+                    warningText = "unfinished deploy",
+                    attentionRequired = true,
+                    showDetails = false
+                )
+            ),
+            recoveryStates
+        )
         assertEquals(listOf("Previous deploy may need review."), statuses)
         assertTrue(logs.contains("unfinished deploy"))
     }
 
     @Test
-    fun `mark reviewed clears warning and refreshes`() {
-        val warnings = mutableListOf<Pair<String, Boolean>>()
+    fun `startup without unfinished journal clears recovery attention`() {
+        val recoveryStates = mutableListOf<RecoveryState>()
+        val workflow = createWorkflow(
+            engine = FakeEngine(warning = null),
+            recoveryStates = recoveryStates,
+            statuses = mutableListOf(),
+            logs = mutableListOf()
+        )
+
+        workflow.checkStartup(FakeEngine(warning = null))
+
+        assertEquals(
+            listOf(
+                RecoveryState(
+                    warningText = "",
+                    attentionRequired = false,
+                    showDetails = false
+                )
+            ),
+            recoveryStates
+        )
+    }
+
+    @Test
+    fun `mark reviewed clears attention and refreshes`() {
+        val recoveryStates = mutableListOf<RecoveryState>()
         val statuses = mutableListOf<String>()
         val logs = mutableListOf<String>()
         var refreshes = 0
         val workflow = createWorkflow(
             engine = FakeEngine(markChanged = true),
-            warnings = warnings,
+            recoveryStates = recoveryStates,
             statuses = statuses,
             logs = logs,
             refreshDashboard = { refreshes++ }
@@ -41,15 +74,43 @@ class DeployRecoveryWorkflowTest {
 
         workflow.markReviewed()
 
-        assertEquals(listOf("" to false), warnings)
+        assertEquals(
+            listOf(
+                RecoveryState(
+                    warningText = "",
+                    attentionRequired = false,
+                    showDetails = false
+                )
+            ),
+            recoveryStates
+        )
         assertEquals(listOf("Previous deploy warning reviewed."), statuses)
         assertTrue(logs.contains("Marked unfinished deploy journal as reviewed."))
         assertEquals(1, refreshes)
     }
 
+    @Test
+    fun `mark reviewed failure does not falsely clear recovery attention`() {
+        val recoveryStates = mutableListOf<RecoveryState>()
+        val statuses = mutableListOf<String>()
+        val logs = mutableListOf<String>()
+        val workflow = createWorkflow(
+            engine = ThrowingMarkEngine(),
+            recoveryStates = recoveryStates,
+            statuses = statuses,
+            logs = logs
+        )
+
+        workflow.markReviewed()
+
+        assertTrue(recoveryStates.isEmpty())
+        assertTrue(statuses.isEmpty())
+        assertTrue(logs.any { it.startsWith("ERROR:Failed to mark deploy journal reviewed") })
+    }
+
     private fun createWorkflow(
         engine: DeployRecoveryEngine,
-        warnings: MutableList<Pair<String, Boolean>>,
+        recoveryStates: MutableList<RecoveryState>,
         statuses: MutableList<String>,
         logs: MutableList<String>,
         refreshDashboard: () -> Unit = {}
@@ -63,11 +124,19 @@ class DeployRecoveryWorkflowTest {
             beginOperation = {},
             finishOperation = {},
             failOperation = { message, _ -> logs += "FAILED:$message" },
-            updateWarningState = { text, show -> warnings += text to show },
+            updateRecoveryState = { text, attentionRequired, show ->
+                recoveryStates += RecoveryState(text, attentionRequired, show)
+            },
             updateLastOperationStatus = statuses::add,
             refreshDashboard = refreshDashboard
         )
     }
+
+    private data class RecoveryState(
+        val warningText: String,
+        val attentionRequired: Boolean,
+        val showDetails: Boolean
+    )
 
     private class FakeEngine(
         private val warning: String? = null,
@@ -75,6 +144,16 @@ class DeployRecoveryWorkflowTest {
     ) : DeployRecoveryEngine {
         override fun getDeploymentJournalStartupWarning(gameId: String): String? = warning
         override fun markDeploymentJournalReviewed(gameId: String): Boolean = markChanged
+        override fun getDeploymentJournalDebugSummary(gameId: String): String = "journal"
+    }
+
+    private class ThrowingMarkEngine : DeployRecoveryEngine {
+        override fun getDeploymentJournalStartupWarning(gameId: String): String? = null
+
+        override fun markDeploymentJournalReviewed(gameId: String): Boolean {
+            throw IllegalStateException("boom")
+        }
+
         override fun getDeploymentJournalDebugSummary(gameId: String): String = "journal"
     }
 }

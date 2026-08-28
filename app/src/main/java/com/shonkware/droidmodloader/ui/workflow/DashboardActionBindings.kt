@@ -1,5 +1,6 @@
 package com.shonkware.droidmodloader.ui.workflow
 
+import com.shonkware.droidmodloader.attention.AppAttentionAction
 import com.shonkware.droidmodloader.ui.DashboardActions
 import com.shonkware.droidmodloader.ui.MainActivityUiState
 
@@ -136,7 +137,29 @@ internal class DashboardActionBindings(
             onViewLastDeployJournal = deployRecoveryWorkflowController::viewLastJournal,
             onOpenDeployRecoveryDetails = deployRecoveryWorkflowController::openRecoveryDetails,
             onCloseDeployRecoveryDetails = deployRecoveryWorkflowController::closeRecoveryDetails,
-            onDismissDeployRecoveryWarning = deployRecoveryWorkflowController::dismissWarning,
+            onAttentionAction = { action ->
+                when (action) {
+                    AppAttentionAction.SELECT_GAME_FOLDER -> {
+                        directFolderSelectionCoordinator.open(FolderPickMode.ActiveGameFolder)
+                    }
+
+                    AppAttentionAction.VIEW_DEPLOY_RECOVERY -> {
+                        deployRecoveryWorkflowController.openRecoveryDetails()
+                    }
+
+                    AppAttentionAction.MARK_DEPLOY_RECOVERY_REVIEWED -> {
+                        deployRecoveryWorkflowController.markReviewed()
+                    }
+                }
+            },
+            onDismissAttentionForSession = { attentionId ->
+                state.dismissedAttentionIds = state.dismissedAttentionIds + attentionId
+                appendLog("Dismissed app attention ${attentionId.value} for this session.")
+            },
+            onSuppressAttentionPromptForSession = { attentionId ->
+                state.suppressedAttentionPromptIds =
+                    state.suppressedAttentionPromptIds + attentionId
+            },
             onMarkDeployRecoveryReviewed = deployRecoveryWorkflowController::markReviewed,
             onRequestForceFullRedeploy = {
                 state.showForceFullRedeployConfirmDialog = true

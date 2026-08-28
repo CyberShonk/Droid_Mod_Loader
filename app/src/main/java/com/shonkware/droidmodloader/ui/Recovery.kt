@@ -3,7 +3,6 @@ package com.shonkware.droidmodloader.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -18,53 +17,9 @@ import com.shonkware.droidmodloader.ui.theme.DmlColors
 import com.shonkware.droidmodloader.ui.theme.DmlDefaults
 
 @Composable
-fun DeployRecoveryWarningCard(
-    warningText: String,
-    onViewDetails: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    if (warningText.isBlank()) return
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = DmlDefaults.panelCardColors(),
-        border = BorderStroke(1.dp, DmlColors.BorderHot)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "Previous deploy may need review",
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = "Droid Mod Loader found a deploy journal that was not marked completed. This build will warn only. Recovery actions are coming later.",
-                style = MaterialTheme.typography.bodySmall
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                DmlButtons.Secondary(
-                    text = "View Details",
-                    onClick = onViewDetails
-                )
-
-                DmlButtons.Secondary(
-                    text = "Dismiss",
-                    onClick = onDismiss
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun RecoveryToolsCard(
     operationInProgress: Boolean,
-    deployRecoveryWarningText: String,
+    deployRecoveryAttentionRequired: Boolean,
     onViewLastDeployJournal: () -> Unit,
     onMarkDeployRecoveryReviewed: () -> Unit,
     onRequestForceFullRedeploy: () -> Unit,
@@ -110,7 +65,7 @@ fun RecoveryToolsCard(
 
             DmlButtons.Secondary(
                 text = "Mark Warning Reviewed",
-                enabled = !operationInProgress && deployRecoveryWarningText.isNotBlank(),
+                enabled = !operationInProgress && deployRecoveryAttentionRequired,
                 onClick = onMarkDeployRecoveryReviewed,
                 modifier = Modifier.fillMaxWidth()
             )

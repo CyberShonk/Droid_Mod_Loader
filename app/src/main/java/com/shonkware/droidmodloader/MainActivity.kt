@@ -10,6 +10,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import com.shonkware.droidmodloader.ui.theme.DmlTheme
+import com.shonkware.droidmodloader.attention.AppAttentionId
+import com.shonkware.droidmodloader.attention.AppAttentionIds
+import com.shonkware.droidmodloader.attention.AppAttentionKind
 import com.shonkware.droidmodloader.engine.ModEngine
 import com.shonkware.droidmodloader.engine.model.Mod
 import com.shonkware.droidmodloader.engine.deploy.GameInstallationResolver
@@ -101,6 +104,10 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
 
     companion object {
         private const val TAG = "DroidModLoader"
+        private const val STATE_DISMISSED_ATTENTION_IDS =
+            "dml.dismissed_attention_ids"
+        private const val STATE_SUPPRESSED_ATTENTION_PROMPT_IDS =
+            "dml.suppressed_attention_prompt_ids"
     }
     private var secondScreenController: SecondScreenController? = null
     private val allFilesAccessManager by lazy {
@@ -650,9 +657,17 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
             beginOperation = { message -> operationReporter.beginOperation(message) },
             finishOperation = { message -> operationReporter.finishOperation(message) },
             failOperation = { message, throwable -> operationReporter.failOperation(message, throwable) },
-            updateWarningState = { warning, showDetails ->
+            updateRecoveryState = { warning, attentionRequired, showDetails ->
                 runOnUiThread {
+                    if (!attentionRequired) {
+                        clearAttentionSessionState(AppAttentionKind.DEPLOY_RECOVERY)
+                    }
                     deployRecoveryWarningText = warning
+                    deployRecoveryAttentionRequired = attentionRequired
+                    deployRecoveryAttentionProfileId =
+                        activeProfileId.takeIf { attentionRequired }
+                    deployRecoveryAttentionGameId =
+                        selectedGameId.takeIf { attentionRequired }
                     showDeployRecoveryDialog = showDetails
                 }
             },
@@ -668,11 +683,6 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
             },
             hideRecoveryDetails = {
                 showDeployRecoveryDialog = false
-            },
-            dismissRecoveryWarning = {
-                deployRecoveryWarningText = ""
-                showDeployRecoveryDialog = false
-                operationReporter.appendLog("Dismissed previous deploy warning for this session.")
             },
             viewLastDeployJournal = {
                 deployRecoveryWorkflow.readLastJournalSummary()
@@ -782,7 +792,14 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
             saveActiveProfile = profileManagementWorkflow::saveActiveProfileFromDashboard,
             ensureDataBaselineIfMissing = profileContentInspectionCoordinator::ensureDataBaselineIfMissing,
             refreshDashboard = dashboardRefreshCoordinator::refresh,
-            appendLog = operationReporter::appendLog
+            appendLog = operationReporter::appendLog,
+            onGameInstallationResolved = {
+                runOnUiThread {
+                    clearAttentionSessionState(
+                        AppAttentionKind.GAME_INSTALLATION_RESELECTION
+                    )
+                }
+            }
         )
     }
 
@@ -1064,8 +1081,32 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
         )
     }
 
+    private fun clearAttentionSessionState(kind: AppAttentionKind) {
+        val profileId = activeProfileId ?: return
+        val gameId = selectedGameId
+        if (gameId.isBlank()) return
+
+        val attentionId = AppAttentionIds.scoped(kind, profileId, gameId)
+        dismissedAttentionIds = dismissedAttentionIds - attentionId
+        suppressedAttentionPromptIds = suppressedAttentionPromptIds - attentionId
+    }
+
+    private fun restoreAttentionSessionState(savedInstanceState: Bundle?) {
+        dismissedAttentionIds = savedInstanceState
+            ?.getStringArrayList(STATE_DISMISSED_ATTENTION_IDS)
+            ?.map(::AppAttentionId)
+            ?.toSet()
+            .orEmpty()
+        suppressedAttentionPromptIds = savedInstanceState
+            ?.getStringArrayList(STATE_SUPPRESSED_ATTENTION_PROMPT_IDS)
+            ?.map(::AppAttentionId)
+            ?.toSet()
+            .orEmpty()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restoreAttentionSessionState(savedInstanceState)
         directFolderSelectionCoordinator.refreshAccessState()
 
         setContent {
@@ -1091,6 +1132,18 @@ class MainActivity : ComponentActivity(), MainActivityUiState by MutableMainActi
 
 
         appStartupCoordinator.initialize()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putStringArrayList(
+            STATE_DISMISSED_ATTENTION_IDS,
+            ArrayList(dismissedAttentionIds.map { it.value })
+        )
+        outState.putStringArrayList(
+            STATE_SUPPRESSED_ATTENTION_PROMPT_IDS,
+            ArrayList(suppressedAttentionPromptIds.map { it.value })
+        )
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {

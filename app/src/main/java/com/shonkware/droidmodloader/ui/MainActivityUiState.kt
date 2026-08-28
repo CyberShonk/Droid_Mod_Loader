@@ -3,6 +3,9 @@ package com.shonkware.droidmodloader.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.shonkware.droidmodloader.attention.AppAttentionId
+import com.shonkware.droidmodloader.attention.AppAttentionProjectionInput
+import com.shonkware.droidmodloader.attention.AppAttentionProjector
 import com.shonkware.droidmodloader.engine.flags.ModFlag
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.index.ModFilePreview
@@ -73,6 +76,11 @@ interface MainActivityUiState {
     var overwriteBaselineExists: Boolean
     var overwriteMessage: String
     var deployRecoveryWarningText: String
+    var deployRecoveryAttentionRequired: Boolean
+    var deployRecoveryAttentionProfileId: String?
+    var deployRecoveryAttentionGameId: String?
+    var dismissedAttentionIds: Set<AppAttentionId>
+    var suppressedAttentionPromptIds: Set<AppAttentionId>
     var showDeployRecoveryDialog: Boolean
     var showForceFullRedeployConfirmDialog: Boolean
 
@@ -144,6 +152,11 @@ internal class MutableMainActivityUiState : MainActivityUiState {
     override var overwriteBaselineExists by mutableStateOf(false)
     override var overwriteMessage by mutableStateOf("")
     override var deployRecoveryWarningText by mutableStateOf("")
+    override var deployRecoveryAttentionRequired by mutableStateOf(false)
+    override var deployRecoveryAttentionProfileId by mutableStateOf<String?>(null)
+    override var deployRecoveryAttentionGameId by mutableStateOf<String?>(null)
+    override var dismissedAttentionIds by mutableStateOf<Set<AppAttentionId>>(emptySet())
+    override var suppressedAttentionPromptIds by mutableStateOf<Set<AppAttentionId>>(emptySet())
     override var showDeployRecoveryDialog by mutableStateOf(false)
     override var showForceFullRedeployConfirmDialog by mutableStateOf(false)
 
@@ -152,6 +165,21 @@ internal class MutableMainActivityUiState : MainActivityUiState {
         allFilesAccessRequired: Boolean,
         directFolderState: DirectFolderSelectionUiState
     ): DashboardUiState {
+        val deployRecoveryRequiredForCurrentProfile =
+            deployRecoveryAttentionRequired &&
+                deployRecoveryAttentionProfileId == activeProfileId &&
+                deployRecoveryAttentionGameId == selectedGameId
+        val appAttention = AppAttentionProjector.project(
+            AppAttentionProjectionInput(
+                profileSessionReady = setupComplete && activeProfileId != null,
+                activeProfileId = activeProfileId,
+                selectedGameId = selectedGameId,
+                gameInstallationReselectionRequired =
+                    dataPathReselectionRequired || rootPathReselectionRequired,
+                deployRecoveryRequired = deployRecoveryRequiredForCurrentProfile
+            )
+        )
+
         return DashboardUiState(
             appName = "Droid Mod Loader",
             versionLabel = BuildConfig.VERSION_NAME,
@@ -219,6 +247,10 @@ internal class MutableMainActivityUiState : MainActivityUiState {
             overwriteBaselineExists = overwriteBaselineExists,
             overwriteMessage = overwriteMessage,
             deployRecoveryWarningText = deployRecoveryWarningText,
+            deployRecoveryAttentionRequired = deployRecoveryRequiredForCurrentProfile,
+            appAttention = appAttention,
+            dismissedAttentionIds = dismissedAttentionIds,
+            suppressedAttentionPromptIds = suppressedAttentionPromptIds,
             showDeployRecoveryDialog = showDeployRecoveryDialog,
             showForceFullRedeployConfirmDialog = showForceFullRedeployConfirmDialog,
             showArchiveFolderSetupDialog = showArchiveFolderSetupDialog,

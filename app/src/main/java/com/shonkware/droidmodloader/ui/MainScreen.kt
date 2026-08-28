@@ -21,6 +21,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.shonkware.droidmodloader.attention.AppAttention
+import com.shonkware.droidmodloader.attention.AppAttentionAction
+import com.shonkware.droidmodloader.attention.AppAttentionId
 import com.shonkware.droidmodloader.engine.flags.ModFlag
 import com.shonkware.droidmodloader.engine.index.ModContentIndex
 import com.shonkware.droidmodloader.engine.index.ModFilePreview
@@ -30,6 +33,7 @@ import com.shonkware.droidmodloader.engine.model.Mod
 import com.shonkware.droidmodloader.engine.model.PluginEntry
 import com.shonkware.droidmodloader.engine.overwrite.OverwriteEntry
 import com.shonkware.droidmodloader.ui.archive.ArchiveBrowserUiState
+import com.shonkware.droidmodloader.ui.attention.AppAttentionPresentationMapper
 import com.shonkware.droidmodloader.ui.theme.DmlMatteBackground
 import com.shonkware.droidmodloader.engine.storage.DirectFolderBrowserState
 
@@ -78,6 +82,10 @@ data class DashboardUiState(
     val overwriteBaselineExists: Boolean,
     val overwriteMessage: String,
     val deployRecoveryWarningText: String = "",
+    val deployRecoveryAttentionRequired: Boolean = false,
+    val appAttention: List<AppAttention> = emptyList(),
+    val dismissedAttentionIds: Set<AppAttentionId> = emptySet(),
+    val suppressedAttentionPromptIds: Set<AppAttentionId> = emptySet(),
     val showDeployRecoveryDialog: Boolean = false,
     val showForceFullRedeployConfirmDialog: Boolean = false,
     val showArchiveFolderSetupDialog: Boolean = false,
@@ -160,7 +168,9 @@ data class DashboardActions(
 
     val onOpenDeployRecoveryDetails: () -> Unit = {},
     val onCloseDeployRecoveryDetails: () -> Unit = {},
-    val onDismissDeployRecoveryWarning: () -> Unit = {},
+    val onAttentionAction: (AppAttentionAction) -> Unit = {},
+    val onDismissAttentionForSession: (AppAttentionId) -> Unit = {},
+    val onSuppressAttentionPromptForSession: (AppAttentionId) -> Unit = {},
 
     val onMarkDeployRecoveryReviewed: () -> Unit = {},
     val onBuildFullRedeployPlan: () -> Unit = {},
@@ -212,11 +222,17 @@ private fun MainDashboardScreen(
                     onOpenProfileDialog = actions.onOpenProfileDialog
                 )
 
-                DeployRecoveryWarningCard(
-                    warningText = state.deployRecoveryWarningText,
-                    onViewDetails = actions.onOpenDeployRecoveryDetails,
-                    onDismiss = actions.onDismissDeployRecoveryWarning
-                )
+                state.appAttention
+                    .filterNot { it.id in state.dismissedAttentionIds }
+                    .forEach { attention ->
+                        AppAttentionCard(
+                            attention = attention,
+                            onAction = actions.onAttentionAction,
+                            onDismissForSession = {
+                                actions.onDismissAttentionForSession(attention.id)
+                            }
+                        )
+                    }
 
                 QuickStartCard()
 
@@ -273,7 +289,7 @@ private fun MainDashboardScreen(
 
                 RecoveryToolsCard(
                     operationInProgress = state.operationInProgress,
-                    deployRecoveryWarningText = state.deployRecoveryWarningText,
+                    deployRecoveryAttentionRequired = state.deployRecoveryAttentionRequired,
                     onViewLastDeployJournal = actions.onViewLastDeployJournal,
                     onBuildFullRedeployPlan = actions.onBuildFullRedeployPlan,
                     onRequestForceFullRedeploy = actions.onRequestForceFullRedeploy,
@@ -351,6 +367,37 @@ fun DroidModLoaderScreen(
             actions = actions
         )
         return
+    }
+
+    val blockingDialogVisible =
+        state.showDirectFolderBrowser ||
+            state.showProfileDialog ||
+            state.showInstallerDialog ||
+            state.showModFilePreviewDialog ||
+            state.showOverwriteDialog ||
+            state.showDeployRecoveryDialog ||
+            state.showForceFullRedeployConfirmDialog ||
+            state.fullscreenPanel != FullscreenPanel.NONE
+
+    if (!blockingDialogVisible) {
+        state.appAttention
+            .firstOrNull { attention ->
+                attention.id !in state.dismissedAttentionIds &&
+                    attention.id !in state.suppressedAttentionPromptIds &&
+                    AppAttentionPresentationMapper.map(attention).automaticPrompt
+            }
+            ?.let { attention ->
+                AppAttentionPromptDialog(
+                    attention = attention,
+                    onAction = { action ->
+                        actions.onSuppressAttentionPromptForSession(attention.id)
+                        actions.onAttentionAction(action)
+                    },
+                    onNotNow = {
+                        actions.onSuppressAttentionPromptForSession(attention.id)
+                    }
+                )
+            }
     }
 
     when (state.fullscreenPanel) {

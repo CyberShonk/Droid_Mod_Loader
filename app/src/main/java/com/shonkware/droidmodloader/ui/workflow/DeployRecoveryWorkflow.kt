@@ -30,7 +30,11 @@ internal class DeployRecoveryWorkflow(
     private val beginOperation: (String) -> Unit,
     private val finishOperation: (String) -> Unit,
     private val failOperation: (String, Throwable?) -> Unit,
-    private val updateWarningState: (warningText: String, showDetails: Boolean) -> Unit,
+    private val updateRecoveryState: (
+        warningText: String,
+        attentionRequired: Boolean,
+        showDetails: Boolean
+    ) -> Unit,
     private val updateLastOperationStatus: (String) -> Unit,
     private val refreshDashboard: () -> Unit
 ) {
@@ -38,14 +42,14 @@ internal class DeployRecoveryWorkflow(
         try {
             val warning = engine.getDeploymentJournalStartupWarning(selectedGameIdProvider())
             if (warning.isNullOrBlank()) {
-                updateWarningState("", false)
+                updateRecoveryState("", false, false)
                 return
             }
 
             appendLog("----- Previous Deploy Journal Warning -----")
             warning.lineSequence().forEach(appendLog)
             appendLog("----- Previous Deploy Journal Warning End -----")
-            updateWarningState(warning, false)
+            updateRecoveryState(warning, true, false)
             updateLastOperationStatus("Previous deploy may need review.")
         } catch (e: Exception) {
             appendError("Failed to check previous deploy journal: ${e.message}", e)
@@ -67,7 +71,7 @@ internal class DeployRecoveryWorkflow(
             } else {
                 appendLog("No unfinished deploy journal needed review.")
             }
-            updateWarningState("", false)
+            updateRecoveryState("", false, false)
         } catch (e: Exception) {
             appendError("Failed to mark deploy journal reviewed: ${e.message}", e)
         }
