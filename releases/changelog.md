@@ -15,6 +15,7 @@ This file records release changes visible to users and known limitations.
 
 ### Fixed
 
+- Deployable mod payload files are no longer excluded just because their names or extensions resemble documentation. Runtime files such as UIO `supported.txt` now deploy to `Data`, while installer files and unrelated development artifacts remain excluded from physical deployment.
 - Physical deployment stops before writes when a selected target belongs to another supported game, uses the wrong role, is obviously too broad, or does not match the selected Data/Game Root installation pair.
 - Deployment state is kept separate for each selected Data and Game Root target, so switching installations does not reuse another target's saved deployment state.
 - Returning to a previously used target reuses that target's own saved deployment state.

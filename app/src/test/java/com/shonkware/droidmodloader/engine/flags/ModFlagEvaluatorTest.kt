@@ -93,6 +93,27 @@ class ModFlagEvaluatorTest {
     }
 
     @Test
+    fun `unknown content is valid when physical deployment scope is data`() {
+        val flags = ModFlagEvaluator(
+            installDirectoryExists = { true }
+        ).evaluate(
+            mod = mod,
+            contentIndex = indexWith(
+                ModContentEntry(
+                    originalPath = "uio/supported.txt",
+                    normalizedPath = "uio/supported.txt",
+                    category = ModContentCategory.UNKNOWN,
+                    reason = "Unknown file type/location",
+                    isDeployable = true,
+                    deployScope = DeployScope.DATA
+                )
+            )
+        )
+
+        assertTrue(flags.isEmpty())
+    }
+
+    @Test
     fun `unknown content remains no valid game data`() {
         val flags = ModFlagEvaluator(
             installDirectoryExists = { true }

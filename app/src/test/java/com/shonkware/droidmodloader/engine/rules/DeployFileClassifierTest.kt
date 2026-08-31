@@ -55,10 +55,66 @@ class DeployFileClassifierTest {
             DeployScope.MANAGER_ONLY,
             classifier.classify("fomod/moduleconfig.xml")
         )
+    }
+
+    @Test
+    fun classify_preservesSelectedRuntimePayloadOutsideKnownManagerPaths() {
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("uio/supported.txt")
+        )
+
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("uio/public/menus.txt")
+        )
+
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("nvse/plugins/script.txt")
+        )
+
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("custom/info.xml")
+        )
+
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("notes.md")
+        )
+
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("docs/readme.txt")
+        )
+
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("README.md")
+        )
+
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("license.txt")
+        )
+
+        assertEquals(
+            DeployScope.DATA,
+            classifier.classify("source/scripts/example.psc")
+        )
+    }
+
+    @Test
+    fun classify_keepsUnrelatedSourceDevelopmentFilesManagerOnly() {
+        assertEquals(
+            DeployScope.MANAGER_ONLY,
+            classifier.classify("source/native/helper.cpp")
+        )
 
         assertEquals(
             DeployScope.MANAGER_ONLY,
-            classifier.classify("docs/readme.txt")
+            classifier.classify("debug/example.pdb")
         )
     }
 

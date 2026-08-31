@@ -28,9 +28,6 @@ class DeployFileClassifier {
             isSetupOnly(path) ->
                 DeployScope.MANAGER_ONLY
 
-            isDocumentation(path, fileName) ->
-                DeployScope.MANAGER_ONLY
-
             isSourceOrDevFile(path, fileName) ->
                 DeployScope.MANAGER_ONLY
 
@@ -85,42 +82,17 @@ class DeployFileClassifier {
         return path.startsWith("fomod/") ||
                 path.startsWith("omod conversion data/") ||
                 path.startsWith("omod/") ||
-                path.startsWith("wizard images/") ||
-                path.endsWith("moduleconfig.xml") ||
-                path.endsWith("info.xml") ||
-                path.endsWith("script.cs") ||
-                path.endsWith("script.txt")
-    }
-
-    private fun isDocumentation(
-        path: String,
-        fileName: String
-    ): Boolean {
-        if (
-            path.startsWith("docs/") ||
-            path.startsWith("doc/") ||
-            path.startsWith("documentation/") ||
-            path.startsWith("readme/")
-        ) {
-            return true
-        }
-
-        if (fileName.contains("readme")) return true
-        if (fileName.contains("changelog")) return true
-        if (fileName.contains("changes")) return true
-        if (fileName.contains("license")) return true
-        if (fileName.contains("credits")) return true
-
-        return fileName.endsWith(".txt") ||
-                fileName.endsWith(".md") ||
-                fileName.endsWith(".rtf") ||
-                fileName.endsWith(".pdf")
+                path.startsWith("wizard images/")
     }
 
     private fun isSourceOrDevFile(
         path: String,
         fileName: String
     ): Boolean {
+        if (path.startsWith("source/scripts/")) {
+            return false
+        }
+
         if (
             path.startsWith("src/") ||
             path.startsWith("source/") ||

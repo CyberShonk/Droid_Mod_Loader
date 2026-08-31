@@ -47,65 +47,66 @@ class ModContentIndexer {
         fun entry(
             category: ModContentCategory,
             reason: String,
-            deployable: Boolean,
             optional: Boolean = optionalCandidate
         ): ModContentEntry {
+            val deployScope = deployFileClassifier.classify(normalizedPath)
+
             return ModContentEntry(
                 originalPath = originalPath,
                 normalizedPath = normalizedPath,
                 category = category,
                 reason = reason,
-                isDeployable = deployable,
-                deployScope = deployFileClassifier.classify(normalizedPath),
+                isDeployable = deployFileClassifier.isDeployable(deployScope),
+                deployScope = deployScope,
                 isOptionalCandidate = optional
             )
         }
 
         if (isIgnored(lower)) {
-            return entry(ModContentCategory.IGNORED, "Ignored metadata/system file", false)
+            return entry(ModContentCategory.IGNORED, "Ignored metadata/system file")
         }
 
         if (isDocumentation(lower, fileName)) {
-            return entry(ModContentCategory.DOCUMENTATION, "Documentation/readme file", false)
+            return entry(ModContentCategory.DOCUMENTATION, "Documentation/readme file")
         }
 
         if (isSetupOnly(lower)) {
-            return entry(ModContentCategory.SETUP_ONLY, "Installer/setup-only file", false)
+            return entry(ModContentCategory.SETUP_ONLY, "Installer/setup-only file")
         }
 
         if (optionalCandidate && !isKnownGameFile(lower, isRootFile)) {
-            return entry(ModContentCategory.OPTIONAL_MODULE, "Optional package/module content", false, true)
+            return entry(ModContentCategory.OPTIONAL_MODULE, "Optional package/module content", true)
         }
 
         if (isPlugin(fileName)) {
-            return entry(ModContentCategory.PLUGIN, "Bethesda plugin file", true, optionalCandidate)
+            return entry(ModContentCategory.PLUGIN, "Bethesda plugin file", optionalCandidate)
         }
 
         if (isBethesdaArchive(fileName)) {
-            return entry(ModContentCategory.ARCHIVE, "Bethesda archive file", true, optionalCandidate)
+            return entry(ModContentCategory.ARCHIVE, "Bethesda archive file", optionalCandidate)
         }
 
         if (isConfigFile(fileName, isRootFile, parent)) {
-            return entry(ModContentCategory.CONFIG, "Game or plugin configuration file", true, optionalCandidate)
+            return entry(ModContentCategory.CONFIG, "Game or plugin configuration file", optionalCandidate)
         }
 
         if (isScriptExtenderFile(lower)) {
-            return entry(ModContentCategory.SCRIPT_EXTENDER, "Script extender file", true, optionalCandidate)
+            return entry(ModContentCategory.SCRIPT_EXTENDER, "Script extender file", optionalCandidate)
         }
 
         if (isKnownDataFolder(lower)) {
-            return entry(ModContentCategory.GAME_FILE, "Recognized game Data folder file", true, optionalCandidate)
+            return entry(ModContentCategory.GAME_FILE, "Recognized game Data folder file", optionalCandidate)
         }
 
         if (isRootGameFile(fileName, isRootFile)) {
-            return entry(ModContentCategory.ROOT_GAME_FILE, "Recognized root-level Data file", true, optionalCandidate)
+            return entry(ModContentCategory.ROOT_GAME_FILE, "Recognized root-level Data file", optionalCandidate)
         }
 
         if (optionalCandidate) {
-            return entry(ModContentCategory.OPTIONAL_MODULE, "Optional package/module content", false, true)
+            return entry(ModContentCategory.OPTIONAL_MODULE, "Optional package/module content", true)
         }
 
-        return entry(ModContentCategory.UNKNOWN, "Unknown file type/location", false)
+        return entry(ModContentCategory.UNKNOWN, "Unknown file type/location")
     }
 
     private fun isPlugin(fileName: String): Boolean {
