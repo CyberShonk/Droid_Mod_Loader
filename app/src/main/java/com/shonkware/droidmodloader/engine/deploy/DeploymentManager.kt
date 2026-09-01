@@ -188,12 +188,54 @@ class DeploymentManager(
             }
         }
 
-        sourceFile.copyTo(targetFile, overwrite = true)
+        val targetAlreadyMatchesSource =
+            oldRecord == null &&
+                    backupInfo != null &&
+                    filesHaveSameContent(sourceFile, targetFile)
+
+        if (!targetAlreadyMatchesSource) {
+            sourceFile.copyTo(targetFile, overwrite = true)
+        }
 
         return record.toDeploymentRecord(
             preservedBackupRecord = oldRecord,
             newBackupInfo = backupInfo
         )
+    }
+
+    private fun filesHaveSameContent(
+        firstFile: File,
+        secondFile: File
+    ): Boolean {
+        if (firstFile.length() != secondFile.length()) {
+            return false
+        }
+
+        firstFile.inputStream().buffered().use { firstStream ->
+            secondFile.inputStream().buffered().use { secondStream ->
+                val firstBuffer = ByteArray(64 * 1024)
+                val secondBuffer = ByteArray(64 * 1024)
+
+                while (true) {
+                    val firstCount = firstStream.read(firstBuffer)
+                    val secondCount = secondStream.read(secondBuffer)
+
+                    if (firstCount != secondCount) {
+                        return false
+                    }
+
+                    if (firstCount == -1) {
+                        return true
+                    }
+
+                    for (index in 0 until firstCount) {
+                        if (firstBuffer[index] != secondBuffer[index]) {
+                            return false
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun backupExistingTargetFile(
